@@ -31,12 +31,40 @@ h1 span{color:var(--track)}
 .sub{color:var(--muted);margin:4px 0 0}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:500}
-.ops{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px}
+.ops{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px}
 .op{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;border:0;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;font:500 .8rem var(--body)}
 .op b{font:800 1.6rem/1 var(--display);color:var(--fg)}
 .op[aria-pressed="true"]{background:var(--track);color:#fff}
 .op[aria-pressed="true"] b{color:#fff}
 .oplv{font-size:.7rem;opacity:.85;font-variant-numeric:tabular-nums}
+.stagesel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+/* Mal mit Bildern */
+.serie{display:flex;align-items:center;gap:10px}
+.segs{flex:1;display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.segs i{height:10px;border-radius:3px;background:var(--line)}
+.segs i.on{background:var(--gold)}
+.serie small{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.story{font-weight:500;font-size:1.05rem;text-wrap:balance;margin-bottom:10px}
+.pic{min-height:110px;display:flex;align-items:center;justify-content:center;width:100%;margin-bottom:10px}
+.plates{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.plate{display:flex;flex-direction:column;align-items:center;gap:4px}
+.plate .in{background:var(--bg);border:2px solid var(--line);border-radius:50%;padding:12px;display:grid;grid-template-columns:repeat(var(--c),1fr);gap:2px;font-size:20px;line-height:1;min-width:44px;min-height:44px;place-content:center}
+.plate.box .in{border-radius:10px}
+.plate .sum{font:700 .95rem var(--display);color:var(--lane);min-height:1.2em;font-variant-numeric:tabular-nums}
+.field{display:inline-grid;gap:4px}
+.field i{width:20px;height:20px;border-radius:50%;background:var(--lane)}
+.field i.b{background:var(--track)}
+.field i.c6{margin-left:6px}
+.field i.r6{margin-top:6px}
+.hidden-pic{display:flex;flex-direction:column;gap:6px;align-items:center;color:var(--muted)}
+.hidden-pic b{font:800 2.6rem var(--display);color:var(--line)}
+.flash{width:100%;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.flash i{display:block;height:100%;background:var(--lane);transition:width linear}
+.plus{color:var(--muted);font:600 1.2rem var(--display);font-variant-numeric:tabular-nums;margin-bottom:4px}
+.helpbox{background:var(--bg);border-radius:12px;padding:10px 12px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:8px;color:var(--fg)}
+.helpbox b{font-family:var(--display);font-size:1.15rem}
+.again{border:2px solid var(--line);background:transparent;color:var(--fg);border-radius:10px;padding:6px 12px;font:500 .9rem var(--body);cursor:pointer}
+.toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--gold);color:#fff;font:800 1.1rem var(--display);padding:10px 18px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:5;white-space:nowrap}
 .rows{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .ranges{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .chip{font:600 1.1rem var(--display);padding:10px 4px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
@@ -118,7 +146,7 @@ const store = {
   get(){ try{ return JSON.parse(localStorage.getItem('e1x1')||'{}') }catch(e){ return {} } },
   set(v){ try{ localStorage.setItem('e1x1', JSON.stringify(v)) }catch(e){} }
 };
-let save = Object.assign({xpBy:{}, op:'mul', rows:[2,3,4,5,10], divRows:[2,5,10], range:{add:'20',sub:'20'}, mode:'sprint', bestBy:{}, weak:{}}, store.get());
+let save = Object.assign({xpBy:{}, bildStage:1, bildStreak:0, bildRecent:[], op:'mul', rows:[2,3,4,5,10], divRows:[2,5,10], range:{add:'20',sub:'20'}, mode:'sprint', bestBy:{}, weak:{}}, store.get());
 // ältere Spielstände übernehmen
 // alte gemeinsame Punkte zählen ab jetzt fürs Einmaleins
 if(save.xp){ save.xpBy.mul = (save.xpBy.mul||0) + save.xp; delete save.xp }
@@ -126,11 +154,21 @@ if(save.best && !save.bestBy.mul){ save.bestBy.mul = save.best; delete save.best
 Object.keys(save.weak).forEach(k=>{ if(!k.includes('|')){ const [a,b]=k.split('x'); save.weak[`mul||${a}|${b}`]=save.weak[k]; delete save.weak[k] } });
 
 const OPS = {
-  mul:{name:'Mal',     sym:'·', title:'Einmaleins'},
+  mul:{name:'Mal',     sym:'·', icon:'×', title:'Einmaleins'},
   div:{name:'Geteilt', sym:':', title:'Geteilt'},
   add:{name:'Plus',    sym:'+', title:'Plus'},
-  sub:{name:'Minus',   sym:'−', title:'Minus'}
+  sub:{name:'Minus',   sym:'−', title:'Minus'},
+  bild:{name:'Bilder', sym:'·', icon:'🍎', title:'Mal mit Bildern'}
 };
+const icon = op => OPS[op].icon || OPS[op].sym;
+const STAGES = [null,['Gruppen','3 Teller mit je 4 Äpfeln'],['Punktefeld','Punkte in Reihen'],['Bild merken','Bild nur kurz sehen']];
+const THINGS = [
+  {e:'🍎', one:'Apfel', many:'Äpfeln', box:'Teller', boxes:'Teller', round:true},
+  {e:'⚽', one:'Ball',  many:'Bällen', box:'Kiste',  boxes:'Kisten', round:false},
+  {e:'🍪', one:'Keks',  many:'Keksen', box:'Dose',   boxes:'Dosen',  round:true},
+  {e:'🥚', one:'Ei',    many:'Eiern',  box:'Karton', boxes:'Kartons',round:false},
+  {e:'⭐', one:'Stern', many:'Sternen',box:'Karte',  boxes:'Karten', round:false}
+];
 const RANGES = {
   add:[['10','bis 10','z. B. 4 + 5'],['20','bis 20','z. B. 8 + 7'],['100e','bis 100','z. B. 47 + 8'],['100','bis 100','z. B. 36 + 45']],
   sub:[['10','bis 10','z. B. 9 − 4'],['20','bis 20','z. B. 15 − 7'],['100e','bis 100','z. B. 53 − 8'],['100','bis 100','z. B. 82 − 37']]
@@ -156,7 +194,11 @@ const weakFor = op => Object.keys(save.weak).filter(k=>{
 function home(){
   const op = save.op, xp = xpOf(op), lv = levelOf(xp), max = lv>=MAXLV;
   const pct = max ? 100 : Math.round((xp-START[lv])/(START[lv+1]-START[lv])*100);
-  const settings = (op==='mul'||op==='div') ? `
+  const settings = op==='bild' ? `
+      <span class="label">Stufe</span>
+      <div class="stagesel">${[1,2,3].map(n=>`<button class="chip" id="st${n}" aria-pressed="${save.bildStage===n}" data-st="${n}">Stufe ${n}<small>${STAGES[n][0]}</small></button>`).join('')}</div>
+      <div class="serie"><div class="segs">${Array.from({length:10},(_,i)=>`<i class="${i<save.bildStreak?'on':''}"></i>`).join('')}</div><small>${serieText()}</small></div>`
+    : (op==='mul'||op==='div') ? `
       <span class="label">${op==='mul'?'Welche Reihen?':'Geteilt durch …'}</span>
       <div class="rows">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" id="r${n}" aria-pressed="${rowsOf(op).includes(n)}" data-r="${n}">${op==='mul'?n+'er':': '+n}</button>`).join('')}</div>`
     : `
@@ -164,12 +206,12 @@ function home(){
       <div class="ranges">${RANGES[op].map(([k,t,ex])=>`<button class="chip" id="g${k}" aria-pressed="${save.range[op]===k}" data-g="${k}">${t}<small>${ex}</small></button>`).join('')}</div>`;
   app.innerHTML = `
     <header><h1>Rechen-<span>Sprint</span></h1><p class="sub">Wie viele Aufgaben schaffst du in einer Minute?</p></header>
-    <nav class="ops" aria-label="Rechenart">${Object.entries(OPS).map(([k,o])=>`<button class="op" data-op="${k}" aria-pressed="${op===k}"><b>${o.sym}</b>${o.name}<small class="oplv">Level ${levelOf(xpOf(k))}</small></button>`).join('')}</nav>
+    <nav class="ops" aria-label="Rechenart">${Object.entries(OPS).map(([k,o])=>`<button class="op" data-op="${k}" aria-pressed="${op===k}"><b>${icon(k)}</b>${o.name}<small class="oplv">Level ${levelOf(xpOf(k))}</small></button>`).join('')}</nav>
     <section class="panel">
       <div class="me"><div class="badge">${lv}</div>
         <div style="flex:1;min-width:0"><b>${OPS[op].title}: ${rankOf(lv)}</b><div class="note">Level ${lv} von ${MAXLV} · ${xp} Punkte${max?' · Höchstes Level erreicht!':` · noch ${START[lv+1]-xp} bis Level ${lv+1}`}</div>
         <div class="xp" style="margin-top:6px"><i style="width:${pct}%"></i></div></div></div>
-      <div class="stats"><div><span class="label">Rekord ${OPS[op].sym}</span><b>${save.bestBy[op]||0}</b></div><div><span class="label">Level ${OPS[op].sym}</span><b>${lv}</b></div><div><span class="label">Übe-Aufgaben</span><b>${weakFor(op).length}</b></div></div>
+      <div class="stats"><div><span class="label">Rekord ${icon(op)}</span><b>${save.bestBy[op]||0}</b></div><div><span class="label">Level ${icon(op)}</span><b>${lv}</b></div><div><span class="label">Übe-Aufgaben</span><b>${weakFor(op).length}</b></div></div>
     </section>
     <section class="panel">
       <label class="label" for="name">Dein Vorname</label>
@@ -190,13 +232,16 @@ function home(){
     if(!save[key].length) save[key]=[n];
     store.set(save); home();
   });
+  app.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ save.bildStage=+b.dataset.st; save.bildStreak=0; save.bildRecent=[]; store.set(save); home() });
   app.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{ save.range[op]=b.dataset.g; store.set(save); home() });
   app.querySelectorAll('.mode').forEach(b=>b.onclick=()=>{ save.mode=b.dataset.m; store.set(save); home() });
   $('#name').oninput = e => { save.name = e.target.value.trim(); store.set(save) };
   $('#go').onclick = start;
 }
 const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function serieText(){ return save.bildStage<3 ? `${save.bildStreak}/10 richtig in Folge bis Stufe ${save.bildStage+1}` : `${save.bildStreak}/10 richtig in Folge` }
 function settingText(op){
+  if(op==='bild') return `Stufe ${save.bildStage}: ${STAGES[save.bildStage][0]}`;
   if(op==='mul') return 'Reihen: ' + [...save.rows].sort((a,b)=>a-b).join(', ');
   if(op==='div') return 'Geteilt durch ' + [...save.divRows].sort((a,b)=>a-b).join(', ');
   const r = RANGES[op].find(x=>x[0]===save.range[op]); return `Zahlenraum ${r[1]} (${r[2]})`;
@@ -211,11 +256,22 @@ async function keepAwake(on){
 
 /* ---------- Aufgaben erzeugen ---------- */
 function make(op,a,b){
-  const sol = op==='mul'?a*b : op==='div'?a/b : op==='add'?a+b : a-b;
-  return {op, set:setOf(op), a, b, sol, id:`${op}|${setOf(op)}|${a}|${b}`};
+  const sol = (op==='mul'||op==='bild')?a*b : op==='div'?a/b : op==='add'?a+b : a-b;
+  const t = {op, set:setOf(op), a, b, sol, id:`${op}|${setOf(op)}|${a}|${b}`};
+  if(op==='bild'){
+    const st = save.bildStage;
+    t.thing = pick1(THINGS);
+    t.view = st===1 ? 'groups' : st===2 ? 'field' : (a<=5 && Math.random()<.5 ? 'groups' : 'field');
+    t.flash = st===3;
+  }
+  return t;
 }
 function gen(op){
   const s = setOf(op);
+  if(op==='bild'){
+    if(save.bildStage===1) return make(op, rnd(2,5), pick1([1,2,3,4,5,2,5,10]));
+    return make(op, rnd(2,10), rnd(2,10));
+  }
   if(op==='mul'){ const r=pick1(save.rows), o=rnd(1,10); return Math.random()<.5?make(op,o,r):make(op,r,o) }
   if(op==='div'){ const r=pick1(save.divRows), q=rnd(1,10); return make(op,r*q,r) }
   if(op==='add'){
@@ -236,12 +292,14 @@ let G, tick;
 function start(){
   const op = save.op, big = setOf(op)==='100';
   G = { op, mode:save.mode, score:0, correct:0, wrong:0, streak:0, bestStreak:0, total:60, left:60,
-        qMax: big?14:9, qLimit: big?14:9, queue:[], misses:[], count:0, input:'', locked:false, last:'' };
+        qMax: big?14:op==='bild'?12:9, qLimit: big?14:op==='bild'?12:9, queue:[], misses:[], count:0, input:'', locked:false, last:'' };
   app.innerHTML = `
     <div class="hud"><button class="btn ghost" id="quit" style="padding:8px 12px;font-size:.9rem" aria-label="Beenden">✕</button>
       <span class="streak" id="streak"></span><span class="big" id="score">0</span></div>
     ${G.mode==='sprint'?`<div class="track" aria-label="Gesamtzeit"><i id="tbar" style="width:100%"></i></div>`:`<div class="note" id="prog"></div>`}
+    ${G.op==='bild'?`<div class="serie"><div class="segs" id="segs"></div><small id="serieTxt"></small></div>`:''}
     <div class="card" id="card">
+      ${G.op==='bild'?`<div class="story" id="story"></div><div class="pic" id="pic"></div><div class="plus" id="plus"></div>`:''}
       <div class="task"><span id="q"></span> = <span class="answer" id="ans"></span></div>
       ${G.mode==='sprint'?`<div class="qtimer" style="margin-top:12px"><i id="qbar"></i></div>`:''}
       <div class="fb" id="fb"></div><div id="help"></div>
@@ -249,8 +307,9 @@ function start(){
     <div class="pad">${[7,8,9,4,5,6,1,2,3].map(n=>`<button data-k="${n}">${n}</button>`).join('')}
       <button class="del" data-k="del" aria-label="Löschen">⌫</button><button data-k="0">0</button><button class="ok" data-k="ok">OK</button></div>`;
   app.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>key(b.dataset.k));
-  $('#quit').onclick = ()=>{ clearInterval(tick); clearTimeout(cd); G=null; keepAwake(false); home() };
+  $('#quit').onclick = ()=>{ clearInterval(tick); clearTimeout(cd); if(G) clearTimeout(G.flashT); G=null; keepAwake(false); home() };
   keepAwake(true);
+  if(G.op==='bild') renderSerie();
   if(G.mode==='train'){ next(); return }
   // Countdown 3-2-1, dann läuft die Uhr
   G.locked = true; let n = 3;
@@ -295,7 +354,70 @@ function next(){
   $('#q').textContent = `${t.a} ${OPS[t.op].sym} ${t.b}`; $('#ans').textContent=''; $('#fb').textContent=''; $('#help').innerHTML='';
   $('#card').className='card';
   if(G.mode==='train') $('#prog').textContent = `Aufgabe ${G.count} von 20`;
+  if(t.op==='bild') showBild(t);
 }
+
+/* ---------- Mal mit Bildern ---------- */
+function groupsHTML(t, sums){
+  const cols = t.b>4 ? 5 : t.b;
+  return `<div class="plates">${Array.from({length:t.a},(_,i)=>`
+    <div class="plate ${t.thing.round?'':'box'}"><div class="in" style="--c:${cols}">${('<span>'+t.thing.e+'</span>').repeat(t.b)}</div>
+    <div class="sum">${sums?(i+1)*t.b:''}</div></div>`).join('')}</div>`;
+}
+function fieldHTML(t){
+  let d='';
+  for(let r=1;r<=t.a;r++) for(let c=1;c<=t.b;c++) d += `<i class="${r>5?'b':''} ${c===6?'c6':''} ${r===6?'r6':''}"></i>`;
+  return `<div class="field" style="grid-template-columns:repeat(${t.b},20px)">${d}</div>`;
+}
+const picHTML = (t,sums) => t.view==='groups' ? groupsHTML(t,sums) : fieldHTML(t);
+function showBild(t){
+  clearTimeout(G.flashT); t.peeked=false;
+  $('#story').textContent = t.view==='groups'
+    ? `${t.a} ${t.a===1?t.thing.box:t.thing.boxes} mit je ${t.b} ${t.b===1?t.thing.one:t.thing.many}`
+    : `${t.a} Reihen mit je ${t.b} Punkten`;
+  $('#plus').textContent = save.bildStage===1 && !t.flash ? Array(t.a).fill(t.b).join(' + ') : '';
+  $('#q').textContent = `${t.a} · ${t.b}`;
+  if(t.flash) flashPic(t); else $('#pic').innerHTML = picHTML(t);
+}
+function flashPic(t){
+  const ms = G.mode==='sprint' ? 2000 : 3000;
+  $('#pic').innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;align-items:center;width:100%">${picHTML(t)}<div class="flash"><i id="fl" style="width:100%"></i></div></div>`;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ const f=$('#fl'); if(f){ f.style.transitionDuration=ms+'ms'; f.style.width='0%' } }));
+  G.flashT = setTimeout(()=>{
+    if(!G || G.cur!==t) return;
+    $('#pic').innerHTML = `<div class="hidden-pic"><b>?</b><span>Das Bild ist weg. Rechne im Kopf!</span>${t.peeked||G.mode==='sprint'?'':'<button class="again" id="peek">Bild nochmal zeigen</button>'}</div>`;
+    const p=$('#peek'); if(p) p.onclick=()=>{ t.peeked=true; flashPic(t) };
+  }, ms);
+}
+function showBildHelp(t){
+  clearTimeout(G.flashT);
+  $('#pic').innerHTML = picHTML(t, true);
+  let h;
+  if(t.view==='groups') h = `Zähle in ${t.b}er-Schritten: <b>${Array.from({length:t.a},(_,i)=>(i+1)*t.b).join(' → ')}</b>`;
+  else if(t.a>5) h = `Blau: <b>5 · ${t.b} = ${5*t.b}</b><br>Orange: <b>${t.a-5} · ${t.b} = ${(t.a-5)*t.b}</b><br>Zusammen: <b>${5*t.b} + ${(t.a-5)*t.b} = ${t.sol}</b>`;
+  else if(t.a===5) h = `Die Hälfte von <b>10 · ${t.b} = ${10*t.b}</b>`;
+  else h = `Zähle Reihe für Reihe: <b>${Array.from({length:t.a},(_,i)=>(i+1)*t.b).join(' → ')}</b>`;
+  $('#help').innerHTML = `<div class="helpbox">${h}${G.mode==='train'?'<br>Tippe jetzt das Ergebnis ein.':''}</div>`;
+}
+function renderSerie(){
+  const s=$('#segs'); if(!s) return;
+  s.innerHTML = Array.from({length:10},(_,i)=>`<i class="${i<save.bildStreak?'on':''}"></i>`).join('');
+  $('#serieTxt').textContent = `Stufe ${save.bildStage} · ${save.bildStreak}/10`;
+}
+/* 10 richtig in Folge: Stufe hoch. 3 von 5 falsch: Stufe runter */
+function bildProgress(ok){
+  save.bildRecent = [...(save.bildRecent||[]), ok].slice(-5);
+  save.bildStreak = ok ? save.bildStreak+1 : 0;
+  if(save.bildStreak>=10){
+    save.bildStreak=0; save.bildRecent=[];
+    if(save.bildStage<3){ save.bildStage++; toast(`Aufgestiegen: Stufe ${save.bildStage}!`) }
+    else toast('Stark! Probier jetzt den Einmaleins-Sprint');
+  } else if(save.bildRecent.filter(x=>!x).length>=3 && save.bildStage>1){
+    save.bildStage--; save.bildStreak=0; save.bildRecent=[]; toast(`Wir üben nochmal mit Stufe ${save.bildStage}`);
+  }
+  store.set(save); renderSerie();
+}
+function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2400) }
 function key(k){
   if(!G || G.locked) return;
   if(k==='del') G.input=G.input.slice(0,-1);
@@ -308,6 +430,23 @@ function judge(timeout){
   const t=G.cur, ok=!timeout && +G.input===t.sol;
   const secs=(performance.now()-G.qStart)/1000;
   const line = `${t.a} ${OPS[t.op].sym} ${t.b} = ${t.sol}`;
+  if(t.op==='bild'){
+    if(ok && t.retry){   // nach der Hilfe selbst richtig eingetippt
+      $('#card').className='card ok'; $('#fb').textContent='Genau, jetzt stimmt es!';
+      setTimeout(()=>{ if(!G) return; if(G.count>=20) return end(); next() }, 1200);
+      return;
+    }
+    clearTimeout(G.flashT);
+    if(ok && t.flash) $('#pic').innerHTML = picHTML(t);
+    bildProgress(ok && !t.peeked);
+    if(!ok && G.mode==='train'){   // Training: Hilfe zeigen, Kind tippt die Lösung selbst ein
+      G.wrong++; G.streak=0; G.misses.push(line); save.weak[t.id]=(save.weak[t.id]||0)+2; store.set(save);
+      t.retry=true; G.input=''; $('#ans').textContent='';
+      $('#card').className='card no'; $('#fb').textContent='Noch nicht. Schau dir das Bild an:';
+      showBildHelp(t); $('#score').textContent=G.score; $('#streak').textContent='';
+      G.locked=false; return;
+    }
+  }
   if(ok){
     G.correct++; G.streak++; G.bestStreak=Math.max(G.bestStreak,G.streak);
     const speed = G.mode==='sprint' ? Math.max(0, Math.round((1-secs/G.qLimit)*10)) : 0;
@@ -323,7 +462,8 @@ function judge(timeout){
     if(G.mode==='sprint') G.qLimit = Math.min(G.qMax, G.qLimit*1.2);
     $('#card').className='card no';
     $('#fb').textContent = (timeout?'Zeit um! ':'')+line;
-    if(G.mode==='train') showHelp(t);
+    if(t.op==='bild') showBildHelp(t);
+    else if(G.mode==='train') showHelp(t);
   }
   $('#score').textContent=G.score;
   $('#streak').textContent = G.streak>=3 ? `🔥 ${G.streak} in Folge${G.streak>=10?' ×3':G.streak>=5?' ×2':''}` : '';
@@ -332,7 +472,7 @@ function judge(timeout){
     if(G.mode==='train' && G.count>=20) return end();
     if(G.mode==='sprint' && G.left<=0) return;
     next();
-  }, ok?450 : G.mode==='train'?2600:1300);
+  }, ok?(t.op==='bild'&&t.flash?900:450) : G.mode==='train'?2600 : t.op==='bild'?2000:1300);
 }
 
 /* Lösungshilfen im Training */
@@ -363,7 +503,7 @@ document.addEventListener('keydown',e=>{
 
 /* ---------- Ergebnis ---------- */
 function end(){
-  clearInterval(tick);
+  clearInterval(tick); if(G) clearTimeout(G.flashT);
   const g=G; G=null;
   const lvBefore=levelOf(xpOf(g.op)); save.xpBy[g.op]=xpOf(g.op)+g.score; const lvNow=levelOf(save.xpBy[g.op]);
   const rec = g.mode==='sprint' && g.correct>(save.bestBy[g.op]||0); if(rec) save.bestBy[g.op]=g.correct;
