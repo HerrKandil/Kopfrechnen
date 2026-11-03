@@ -36,6 +36,7 @@ h1 span{color:var(--track)}
 .op b{font:800 1.6rem/1 var(--display);color:var(--fg)}
 .op[aria-pressed="true"]{background:var(--track);color:#fff}
 .op[aria-pressed="true"] b{color:#fff}
+.oplv{font-size:.7rem;opacity:.85;font-variant-numeric:tabular-nums}
 .rows{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .ranges{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .chip{font:600 1.1rem var(--display);padding:10px 4px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
@@ -117,8 +118,10 @@ const store = {
   get(){ try{ return JSON.parse(localStorage.getItem('e1x1')||'{}') }catch(e){ return {} } },
   set(v){ try{ localStorage.setItem('e1x1', JSON.stringify(v)) }catch(e){} }
 };
-let save = Object.assign({xp:0, op:'mul', rows:[2,3,4,5,10], divRows:[2,5,10], range:{add:'20',sub:'20'}, mode:'sprint', bestBy:{}, weak:{}}, store.get());
+let save = Object.assign({xpBy:{}, op:'mul', rows:[2,3,4,5,10], divRows:[2,5,10], range:{add:'20',sub:'20'}, mode:'sprint', bestBy:{}, weak:{}}, store.get());
 // ältere Spielstände übernehmen
+// alte gemeinsame Punkte zählen ab jetzt fürs Einmaleins
+if(save.xp){ save.xpBy.mul = (save.xpBy.mul||0) + save.xp; delete save.xp }
 if(save.best && !save.bestBy.mul){ save.bestBy.mul = save.best; delete save.best }
 Object.keys(save.weak).forEach(k=>{ if(!k.includes('|')){ const [a,b]=k.split('x'); save.weak[`mul||${a}|${b}`]=save.weak[k]; delete save.weak[k] } });
 
@@ -132,9 +135,14 @@ const RANGES = {
   add:[['10','bis 10','z. B. 4 + 5'],['20','bis 20','z. B. 8 + 7'],['100e','bis 100','z. B. 47 + 8'],['100','bis 100','z. B. 36 + 45']],
   sub:[['10','bis 10','z. B. 9 − 4'],['20','bis 20','z. B. 15 − 7'],['100e','bis 100','z. B. 53 − 8'],['100','bis 100','z. B. 82 − 37']]
 };
-const LEVELS = [0,150,400,800,1400,2200,3200,4500,6000,8000];
+// 100 Level pro Rechenart. Jeder Aufstieg kostet mehr Punkte als der vorherige.
+const MAXLV = 100;
+const COST = L => Math.round((100 + 8*Math.pow(L-1,1.5))/10)*10;   // Punkte von Level L nach L+1
+const START = [0,0]; for(let L=2; L<=MAXLV; L++) START[L] = START[L-1] + COST(L-1);
 const RANKS = ['Einsteiger','Läufer','Sprinter','Staffel-Profi','Bezirksmeister','Landesmeister','Deutscher Meister','Europameister','Weltmeister','Rechen-Legende'];
-function levelOf(xp){ let l=0; LEVELS.forEach((v,i)=>{ if(xp>=v) l=i }); return l }
+function levelOf(xp){ let L=1; while(L<MAXLV && xp>=START[L+1]) L++; return L }
+const rankOf = L => RANKS[Math.min(9, Math.floor((L-1)/10))];
+const xpOf = op => save.xpBy[op]||0;
 const setOf = op => (op==='add'||op==='sub') ? save.range[op] : '';
 const rowsOf = op => op==='div' ? save.divRows : save.rows;
 const weakFor = op => Object.keys(save.weak).filter(k=>{
@@ -146,8 +154,8 @@ const weakFor = op => Object.keys(save.weak).filter(k=>{
 
 /* ---------- Startseite ---------- */
 function home(){
-  const op = save.op, lv = levelOf(save.xp), next = LEVELS[lv+1] ?? LEVELS[lv], prev = LEVELS[lv];
-  const pct = next===prev ? 100 : Math.round((save.xp-prev)/(next-prev)*100);
+  const op = save.op, xp = xpOf(op), lv = levelOf(xp), max = lv>=MAXLV;
+  const pct = max ? 100 : Math.round((xp-START[lv])/(START[lv+1]-START[lv])*100);
   const settings = (op==='mul'||op==='div') ? `
       <span class="label">${op==='mul'?'Welche Reihen?':'Geteilt durch …'}</span>
       <div class="rows">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" id="r${n}" aria-pressed="${rowsOf(op).includes(n)}" data-r="${n}">${op==='mul'?n+'er':': '+n}</button>`).join('')}</div>`
@@ -156,12 +164,12 @@ function home(){
       <div class="ranges">${RANGES[op].map(([k,t,ex])=>`<button class="chip" id="g${k}" aria-pressed="${save.range[op]===k}" data-g="${k}">${t}<small>${ex}</small></button>`).join('')}</div>`;
   app.innerHTML = `
     <header><h1>Rechen-<span>Sprint</span></h1><p class="sub">Wie viele Aufgaben schaffst du in einer Minute?</p></header>
-    <nav class="ops" aria-label="Rechenart">${Object.entries(OPS).map(([k,o])=>`<button class="op" data-op="${k}" aria-pressed="${op===k}"><b>${o.sym}</b>${o.name}</button>`).join('')}</nav>
+    <nav class="ops" aria-label="Rechenart">${Object.entries(OPS).map(([k,o])=>`<button class="op" data-op="${k}" aria-pressed="${op===k}"><b>${o.sym}</b>${o.name}<small class="oplv">Level ${levelOf(xpOf(k))}</small></button>`).join('')}</nav>
     <section class="panel">
-      <div class="me"><div class="badge">${lv+1}</div>
-        <div style="flex:1;min-width:0"><b>${RANKS[lv]}</b><div class="note">${save.xp} Punkte gesamt${lv<LEVELS.length-1?` · noch ${next-save.xp} bis Level ${lv+2}`:''}</div>
+      <div class="me"><div class="badge">${lv}</div>
+        <div style="flex:1;min-width:0"><b>${OPS[op].title}: ${rankOf(lv)}</b><div class="note">Level ${lv} von ${MAXLV} · ${xp} Punkte${max?' · Höchstes Level erreicht!':` · noch ${START[lv+1]-xp} bis Level ${lv+1}`}</div>
         <div class="xp" style="margin-top:6px"><i style="width:${pct}%"></i></div></div></div>
-      <div class="stats"><div><span class="label">Rekord ${OPS[op].sym}</span><b>${save.bestBy[op]||0}</b></div><div><span class="label">Level</span><b>${lv+1}</b></div><div><span class="label">Übe-Aufgaben</span><b>${weakFor(op).length}</b></div></div>
+      <div class="stats"><div><span class="label">Rekord ${OPS[op].sym}</span><b>${save.bestBy[op]||0}</b></div><div><span class="label">Level ${OPS[op].sym}</span><b>${lv}</b></div><div><span class="label">Übe-Aufgaben</span><b>${weakFor(op).length}</b></div></div>
     </section>
     <section class="panel">
       <label class="label" for="name">Dein Vorname</label>
@@ -357,10 +365,10 @@ document.addEventListener('keydown',e=>{
 function end(){
   clearInterval(tick);
   const g=G; G=null;
-  const lvBefore=levelOf(save.xp); save.xp+=g.score;
+  const lvBefore=levelOf(xpOf(g.op)); save.xpBy[g.op]=xpOf(g.op)+g.score; const lvNow=levelOf(save.xpBy[g.op]);
   const rec = g.mode==='sprint' && g.correct>(save.bestBy[g.op]||0); if(rec) save.bestBy[g.op]=g.correct;
   store.set(save);
-  const lvUp = levelOf(save.xp)>lvBefore;
+  const lvUp = lvNow>lvBefore;
   const quote = g.correct+g.wrong ? g.correct/(g.correct+g.wrong) : 0;
   const stars = (quote>=.6?1:0)+(quote>=.8?1:0)+(quote>=.95?1:0);
   keepAwake(false);
@@ -374,10 +382,10 @@ function end(){
       <div>hat <b>${g.correct} von ${g.correct+g.wrong}</b> Aufgaben richtig gelöst${g.mode==='sprint'?' – in 60 Sekunden':''}.</div>
       <div class="stars" aria-label="${stars} von 3 Sternen">${'★'.repeat(stars)}${'☆'.repeat(3-stars)}</div>
       <div class="what">${esc(settingText(g.op))}</div>
-      <div class="note">${date}, ${time} Uhr · Level ${levelOf(save.xp)+1} (${RANKS[levelOf(save.xp)]})</div>
+      <div class="note">${date}, ${time} Uhr · ${OPS[g.op].title}: Level ${lvNow} (${rankOf(lvNow)})</div>
     </section>`;
   app.innerHTML = cert + `
-    ${rec||lvUp?`<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${rec?'<span class="new">Neuer Rekord!</span>':''}${lvUp?`<span class="new">Aufgestiegen: Level ${levelOf(save.xp)+1} · ${RANKS[levelOf(save.xp)]}</span>`:''}</div>`:''}
+    ${rec||lvUp?`<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${rec?'<span class="new">Neuer Rekord!</span>':''}${lvUp?`<span class="new">Aufgestiegen: ${OPS[g.op].title} Level ${lvNow}${lvNow-lvBefore>1?` (+${lvNow-lvBefore})`:''} · ${rankOf(lvNow)}</span>`:''}</div>`:''}
     <section class="panel"><div class="stats">
       <div><span class="label">Punkte</span><b>${g.score}</b></div>
       <div><span class="label">Fehler</span><b>${g.wrong}</b></div>
