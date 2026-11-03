@@ -37,6 +37,8 @@ h1 span{color:var(--track)}
 .op[aria-pressed="true"]{background:var(--track);color:#fff}
 .op[aria-pressed="true"] b{color:#fff}
 .oplv{font-size:.7rem;opacity:.85;font-variant-numeric:tabular-nums}
+.lock{font-size:.85rem;color:var(--muted);background:var(--bg);border-radius:10px;padding:8px 10px}
+.lock.on{color:var(--fg);background:var(--track-soft)}
 .stagesel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 /* Mal mit Bildern */
 .serie{display:flex;align-items:center;gap:10px}
@@ -146,7 +148,7 @@ const store = {
   get(){ try{ return JSON.parse(localStorage.getItem('e1x1')||'{}') }catch(e){ return {} } },
   set(v){ try{ localStorage.setItem('e1x1', JSON.stringify(v)) }catch(e){} }
 };
-let save = Object.assign({xpBy:{}, bildStage:1, bildStreak:0, bildRecent:[], op:'mul', rows:[2,3,4,5,10], divRows:[2,5,10], range:{add:'20',sub:'20'}, mode:'sprint', bestBy:{}, weak:{}}, store.get());
+let save = Object.assign({xpBy:{}, master:{}, floor:{}, bildStage:1, bildStreak:0, bildRecent:[], op:'mul', rows:[2,3,4,5,10], divRows:[2,5,10], range:{add:'20',sub:'20'}, mode:'sprint', bestBy:{}, weak:{}}, store.get());
 // ältere Spielstände übernehmen
 // alte gemeinsame Punkte zählen ab jetzt fürs Einmaleins
 if(save.xp){ save.xpBy.mul = (save.xpBy.mul||0) + save.xp; delete save.xp }
@@ -162,25 +164,25 @@ const OPS = {
 };
 const icon = op => OPS[op].icon || OPS[op].sym;
 
-/* Punkte pro Aufgabe hängen davon ab, wie schwer die Aufgabe ist.
-   1er-Aufgaben geben 0 Punkte, die 7er- und 8er-Reihe am meisten. */
-const FAKTOR = {1:0, 10:2, 2:4, 5:4, 3:8, 4:8, 6:12, 9:12, 7:15, 8:15};
-function malWert(a,b){
-  if(a===1||b===1) return 0;
-  if(a===10||b===10) return 2;
-  const lo=Math.min(FAKTOR[a],FAKTOR[b]), hi=Math.max(FAKTOR[a],FAKTOR[b]);
-  return Math.round(lo + (hi-lo)*.25);   // die leichtere Zahl bestimmt den Rechenweg (2 · 7 = verdoppeln)
+/* Jede Aufgabe gibt gleich viele Punkte. Zum Aufsteigen braucht man aber mehrere sichere Reihen:
+   Eine Reihe (bzw. ein Zahlenraum) ist sicher nach 20 richtig gelösten Aufgaben daraus.
+   Mit nur einer sicheren Reihe bleibt man auf Level 1, alle Reihen sicher erlaubt Level 100. */
+const SICHER = 20;
+const RANGENAME = {'10':'bis 10','20':'bis 20','100e':'bis 100 (einstellig)','100':'bis 100 (zweistellig)'};
+const unitsOf = op => (op==='add'||op==='sub') ? ['10','20','100e','100'] : ['1','2','3','4','5','6','7','8','9','10'];
+const unitName = (op,u) => op==='mul'||op==='bild' ? `${u}er-Reihe` : op==='div' ? `Geteilt durch ${u}` : `${OPS[op].name} ${RANGENAME[u]}`;
+function unitOf(t){
+  if(t.op==='add'||t.op==='sub') return t.set;
+  if(t.op==='div'||t.op==='bild') return String(t.b);
+  return String(t.row ?? (save.rows.includes(t.a) ? t.a : t.b));
 }
-const ROWMAX = n => n===1 ? 0 : Math.max(...[2,3,4,5,6,7,8,9].map(m=>malWert(n,m)));
-const RANGEPTS = {'10':[1,1], '20':[3,6], '100e':[6,10], '100':[10,15]};   // [ohne, mit Zehnerübergang]
-const STAGEFAKTOR = {1:.5, 2:.8, 3:1};
-function taskPoints(t){
-  if(t.op==='mul') return malWert(t.a,t.b);
-  if(t.op==='div') return t.b===1||t.sol===1 ? 0 : malWert(t.b,t.sol)+2;
-  if(t.op==='bild') return Math.round(malWert(t.a,t.b)*STAGEFAKTOR[t.stage||1]);
-  const [ohne,mit] = RANGEPTS[t.set];
-  const ueber = t.op==='add' ? (t.a%10)+(t.b%10)>=10 : (t.a%10)<(t.b%10);
-  return ueber ? mit : ohne;
+const masterCount = (op,u) => ((save.master[op]||{})[u])||0;
+const sicherList = op => unitsOf(op).filter(u=>masterCount(op,u)>=SICHER);
+const sicherText = (op,n) => { const w = op==='add'||op==='sub' ? 'Stufe' : 'Reihe'; return n===1 ? `einer sicheren ${w}` : `${n} sicheren ${w}n` };
+function capOf(op){
+  const n=unitsOf(op).length, k=sicherList(op).length;
+  const cap = k<=1 ? 1 : Math.round(1 + 99*(k-1)/(n-1));
+  return Math.max(cap, (save.floor||{})[op]||1);
 }
 const STAGES = [null,['Gruppen','3 Teller mit je 4 Äpfeln'],['Punktefeld','Punkte in Reihen'],['Bild merken','Bild nur kurz sehen']];
 const THINGS = [
@@ -202,6 +204,9 @@ const RANKS = ['Einsteiger','Läufer','Sprinter','Staffel-Profi','Bezirksmeister
 function levelOf(xp){ let L=1; while(L<MAXLV && xp>=START[L+1]) L++; return L }
 const rankOf = L => RANKS[Math.min(9, Math.floor((L-1)/10))];
 const xpOf = op => save.xpBy[op]||0;
+const lvlOf = op => Math.min(levelOf(xpOf(op)), capOf(op));
+// Level von gestern bleiben erhalten (einmalig festgeschrieben)
+if(!save.floorInit){ Object.keys(OPS).forEach(op=>{ save.floor[op]=levelOf(xpOf(op)) }); save.floorInit=true; store.set(save) }
 const setOf = op => (op==='add'||op==='sub') ? save.range[op] : '';
 const rowsOf = op => op==='div' ? save.divRows : save.rows;
 const weakFor = op => Object.keys(save.weak).filter(k=>{
@@ -213,27 +218,37 @@ const weakFor = op => Object.keys(save.weak).filter(k=>{
 
 /* ---------- Startseite ---------- */
 function home(){
-  const op = save.op, xp = xpOf(op), lv = levelOf(xp), max = lv>=MAXLV;
-  const pct = max ? 100 : Math.round((xp-START[lv])/(START[lv+1]-START[lv])*100);
+  const op = save.op, xp = xpOf(op), lv = lvlOf(op), max = lv>=MAXLV, cap = capOf(op);
+  const locked = !max && lv>=cap && xp>=START[lv+1]-1;
+  const pct = max ? 100 : Math.min(100, Math.round((xp-START[lv])/(START[lv+1]-START[lv])*100));
+  const sl = sicherList(op), nU = unitsOf(op).length;
+  const chipSub = u => masterCount(op,u)>=SICHER ? '✓ sicher' : `${masterCount(op,u)}/${SICHER}`;
+  const sicherNote = `<p class="note" style="margin:0">Eine ${op==='add'||op==='sub'?'Stufe':'Reihe'} ist sicher, wenn du ${SICHER} Aufgaben daraus richtig gelöst hast. Je mehr sicher sind, desto höher kannst du aufsteigen.</p>`;
   const settings = op==='bild' ? `
       <span class="label">Stufe</span>
-      <div class="stagesel">${[1,2,3].map(n=>`<button class="chip" id="st${n}" aria-pressed="${save.bildStage===n}" data-st="${n}">Stufe ${n}<small>${STAGES[n][0]}</small><small>${STAGEFAKTOR[n]*100} % Punkte</small></button>`).join('')}</div>
-      <div class="serie"><div class="segs">${Array.from({length:10},(_,i)=>`<i class="${i<save.bildStreak?'on':''}"></i>`).join('')}</div><small>${serieText()}</small></div>`
+      <div class="stagesel">${[1,2,3].map(n=>`<button class="chip" id="st${n}" aria-pressed="${save.bildStage===n}" data-st="${n}">Stufe ${n}<small>${STAGES[n][0]}</small></button>`).join('')}</div>
+      <div class="serie"><div class="segs">${Array.from({length:10},(_,i)=>`<i class="${i<save.bildStreak?'on':''}"></i>`).join('')}</div><small>${serieText()}</small></div>
+      <span class="label">Sichere Reihen</span>
+      <div class="rows">${unitsOf(op).map(u=>`<div class="chip" style="cursor:default;text-align:center" aria-pressed="${masterCount(op,u)>=SICHER}">${u}er<small>${chipSub(u)}</small></div>`).join('')}</div>
+      ${sicherNote}`
     : (op==='mul'||op==='div') ? `
       <span class="label">${op==='mul'?'Welche Reihen?':'Geteilt durch …'}</span>
-      <div class="rows">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" id="r${n}" aria-pressed="${rowsOf(op).includes(n)}" data-r="${n}">${op==='mul'?n+'er':': '+n}<small>${n===1?'0 P':'bis '+(ROWMAX(n)+(op==='div'?2:0))+' P'}</small></button>`).join('')}</div>
-      <p class="note" style="margin:0">Schwere Reihen bringen mehr Punkte. Mit der 1er-Reihe gibt es keine Punkte.</p>`
+      <div class="rows">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" id="r${n}" aria-pressed="${rowsOf(op).includes(n)}" data-r="${n}">${op==='mul'?n+'er':': '+n}<small>${chipSub(String(n))}</small></button>`).join('')}</div>
+      ${sicherNote}`
     : `
       <span class="label">Zahlenraum</span>
-      <div class="ranges">${RANGES[op].map(([k,t,ex])=>`<button class="chip" id="g${k}" aria-pressed="${save.range[op]===k}" data-g="${k}">${t}<small>${ex}</small><small>${RANGEPTS[k][0]===RANGEPTS[k][1]?RANGEPTS[k][0]:RANGEPTS[k][0]+'–'+RANGEPTS[k][1]} P pro Aufgabe</small></button>`).join('')}</div>
-      <p class="note" style="margin:0">Aufgaben über den Zehner bringen mehr Punkte.</p>`;
+      <div class="ranges">${RANGES[op].map(([k,t,ex])=>`<button class="chip" id="g${k}" aria-pressed="${save.range[op]===k}" data-g="${k}">${t}<small>${ex}</small><small>${chipSub(k)}</small></button>`).join('')}</div>
+      ${sicherNote}`;
   app.innerHTML = `
     <header><h1>Rechen-<span>Sprint</span></h1><p class="sub">Wie viele Aufgaben schaffst du in einer Minute?</p></header>
-    <nav class="ops" aria-label="Rechenart">${Object.entries(OPS).map(([k,o])=>`<button class="op" data-op="${k}" aria-pressed="${op===k}"><b>${icon(k)}</b>${o.name}<small class="oplv">Level ${levelOf(xpOf(k))}</small></button>`).join('')}</nav>
+    <nav class="ops" aria-label="Rechenart">${Object.entries(OPS).map(([k,o])=>`<button class="op" data-op="${k}" aria-pressed="${op===k}"><b>${icon(k)}</b>${o.name}<small class="oplv">Level ${lvlOf(k)}</small></button>`).join('')}</nav>
     <section class="panel">
       <div class="me"><div class="badge">${lv}</div>
-        <div style="flex:1;min-width:0"><b>${OPS[op].title}: ${rankOf(lv)}</b><div class="note">Level ${lv} von ${MAXLV} · ${xp} Punkte${max?' · Höchstes Level erreicht!':` · noch ${START[lv+1]-xp} bis Level ${lv+1}`}</div>
+        <div style="flex:1;min-width:0"><b>${OPS[op].title}: ${rankOf(lv)}</b><div class="note">Level ${lv} von ${MAXLV} · ${xp} Punkte${max?' · Höchstes Level erreicht!':locked?'':` · noch ${START[lv+1]-xp} bis Level ${lv+1}`}</div>
         <div class="xp" style="margin-top:6px"><i style="width:${pct}%"></i></div></div></div>
+      <div class="lock ${locked?'on':''}">${locked
+        ? `🔒 <b>Level-Sperre.</b> Mit ${sicherText(op,sl.length)} geht es nur bis Level ${cap}. Übe eine neue ${op==='add'||op==='sub'?'Stufe':'Reihe'}, dann geht es weiter.`
+        : `Sicher: <b>${sl.length} von ${nU}</b>${sl.length?' ('+sl.map(u=>op==='add'||op==='sub'?RANGENAME[u]:u+(op==='div'?'':'er')).join(', ')+')':''} · damit bis Level <b>${cap}</b>`}</div>
       <div class="stats"><div><span class="label">Rekord ${icon(op)}</span><b>${save.bestBy[op]||0}</b></div><div><span class="label">Level ${icon(op)}</span><b>${lv}</b></div><div><span class="label">Übe-Aufgaben</span><b>${weakFor(op).length}</b></div></div>
     </section>
     <section class="panel">
@@ -285,7 +300,7 @@ function make(op,a,b){
     const st = save.bildStage;
     t.thing = pick1(THINGS);
     t.view = st===1 ? 'groups' : st===2 ? 'field' : (a<=5 && Math.random()<.5 ? 'groups' : 'field');
-    t.flash = st===3; t.stage = st;
+    t.flash = st===3;
   }
   return t;
 }
@@ -295,7 +310,7 @@ function gen(op){
     if(save.bildStage===1) return make(op, rnd(2,5), pick1([1,2,3,4,5,2,5,10]));
     return make(op, rnd(2,10), rnd(2,10));
   }
-  if(op==='mul'){ const r=pick1(save.rows), o=rnd(1,10); return Math.random()<.5?make(op,o,r):make(op,r,o) }
+  if(op==='mul'){ const r=pick1(save.rows), o=rnd(1,10), t = Math.random()<.5?make(op,o,r):make(op,r,o); t.row=r; return t }
   if(op==='div'){ const r=pick1(save.divRows), q=rnd(1,10); return make(op,r*q,r) }
   if(op==='add'){
     if(s==='10'){ const a=rnd(1,9); return make(op,a,rnd(1,10-a)) }
@@ -440,6 +455,11 @@ function bildProgress(ok){
   }
   store.set(save); renderSerie();
 }
+function countSicher(t){
+  const u=unitOf(t); save.master[t.op]=save.master[t.op]||{};
+  const before=masterCount(t.op,u); save.master[t.op][u]=before+1;
+  if(before+1===SICHER) toast(`${unitName(t.op,u)} ist jetzt sicher!`);
+}
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2400) }
 function key(k){
   if(!G || G.locked) return;
@@ -474,7 +494,8 @@ function judge(timeout){
     G.correct++; G.streak++; G.bestStreak=Math.max(G.bestStreak,G.streak);
     const speed = G.mode==='sprint' ? Math.max(0, Math.round((1-secs/G.qLimit)*10)) : 0;
     const mult = G.streak>=10?3 : G.streak>=5?2 : 1;
-    const pts = Math.round(taskPoints(t)*(1+speed/10))*mult; G.score+=pts; if(pts>0) popup('+'+pts);
+    const pts = (10+speed)*mult; G.score+=pts; popup('+'+pts);
+    countSicher(t);
     // schneller = schwerer: Zeitlimit pro Aufgabe schrumpft
     if(G.mode==='sprint' && secs < G.qLimit*.6) G.qLimit = Math.max(3, G.qLimit*.9);
     if(save.weak[t.id]){ save.weak[t.id]--; if(save.weak[t.id]<=0) delete save.weak[t.id] }
@@ -528,7 +549,11 @@ document.addEventListener('keydown',e=>{
 function end(){
   clearInterval(tick); if(G) clearTimeout(G.flashT);
   const g=G; G=null;
-  const lvBefore=levelOf(xpOf(g.op)); save.xpBy[g.op]=xpOf(g.op)+g.score; const lvNow=levelOf(save.xpBy[g.op]);
+  const lvBefore=lvlOf(g.op), cap=capOf(g.op), old=xpOf(g.op), want=old+g.score;
+  const limit = cap>=MAXLV ? Infinity : START[cap+1]-1;
+  save.xpBy[g.op] = Math.max(old, Math.min(want, limit));
+  const blocked = want>limit && g.score>0;
+  const lvNow=lvlOf(g.op);
   const rec = g.mode==='sprint' && g.correct>(save.bestBy[g.op]||0); if(rec) save.bestBy[g.op]=g.correct;
   store.set(save);
   const lvUp = lvNow>lvBefore;
@@ -548,6 +573,7 @@ function end(){
       <div class="note">${date}, ${time} Uhr · ${OPS[g.op].title}: Level ${lvNow} (${rankOf(lvNow)})</div>
     </section>`;
   app.innerHTML = cert + `
+    ${blocked?`<div class="lock on">🔒 <b>Level-Sperre:</b> Du bist auf Level ${lvNow}, dem höchsten Level mit ${sicherText(g.op,sicherList(g.op).length)}. Übe eine neue ${g.op==='add'||g.op==='sub'?'Stufe':'Reihe'}, dann sammelst du wieder Punkte fürs Level.</div>`:''}
     ${rec||lvUp?`<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${rec?'<span class="new">Neuer Rekord!</span>':''}${lvUp?`<span class="new">Aufgestiegen: ${OPS[g.op].title} Level ${lvNow}${lvNow-lvBefore>1?` (+${lvNow-lvBefore})`:''} · ${rankOf(lvNow)}</span>`:''}</div>`:''}
     <section class="panel"><div class="stats">
       <div><span class="label">Punkte</span><b>${g.score}</b></div>
