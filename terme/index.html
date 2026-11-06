@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Klammer-Profi">
+<title>Klammer-Profi</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Lexend:wght@400;500;700&display=swap">
+<style>
+/* Layout: eine Spalte wie ein Arbeitsheft; Lernpfad als Liste, Aufgabenkarte + Termtastatur unten */
+:root{
+  --bg:#f0f1f7; --surface:#ffffff; --fg:#1e2033; --muted:#5e6178; --line:#d9dbe8;
+  --accent:#5847c9; --accent-soft:#e6e2fa; --second:#c9502f; --second-soft:#f8e0d7;
+  --good:#22895a; --good-soft:#d8f0e4; --bad:#c2333b; --bad-soft:#f8dcdd; --warn:#a86a00; --warn-soft:#fbecc9; --gold:#c99a12;
+  --display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --body:"Lexend", "Segoe UI", system-ui, sans-serif;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15161f; --surface:#1f2130; --fg:#e9eaf3; --muted:#a0a3ba; --line:#34374b;
+  --accent:#9b8cf5; --accent-soft:#2b2747; --second:#e57a58; --second-soft:#3b2620;
+  --good:#4cc48a; --good-soft:#1c3529; --bad:#ef6b72; --bad-soft:#3d2125; --warn:#f0b543; --warn-soft:#3a2f17; --gold:#e8bd3c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15161f; --surface:#1f2130; --fg:#e9eaf3; --muted:#a0a3ba; --line:#34374b;
+  --accent:#9b8cf5; --accent-soft:#2b2747; --second:#e57a58; --second-soft:#3b2620;
+  --good:#4cc48a; --good-soft:#1c3529; --bad:#ef6b72; --bad-soft:#3d2125; --warn:#f0b543; --warn-soft:#3a2f17; --gold:#e8bd3c; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+[hidden]{display:none!important}
+.app{max-width:600px;margin:0 auto;padding-block:20px 32px;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.15}
+h1{font-size:2rem;font-weight:800;letter-spacing:-.01em}
+h1 span{color:var(--accent)}
+h2{font-size:1.5rem;font-weight:800}
+h3{font-size:1.1rem;font-weight:700}
+p{margin:0}
+.sub{color:var(--muted);margin-top:4px}
+.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.note{font-size:.85rem;color:var(--muted)}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn{font:700 1.1rem var(--body);padding:14px;border-radius:12px;border:0;background:var(--accent);color:#fff;cursor:pointer;width:100%}
+.btn.ghost{background:transparent;color:var(--fg);border:2px solid var(--line)}
+.btn.small{width:auto;padding:8px 14px;font-size:.95rem}
+.m{font-family:var(--display);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* Tabs */
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px}
+.tab{border:0;border-radius:10px;background:transparent;color:var(--muted);padding:10px 4px;cursor:pointer;font:500 .85rem var(--body);display:flex;flex-direction:column;align-items:center;gap:2px}
+.tab b{font:800 1.05rem var(--display);color:var(--fg)}
+.tab[aria-pressed="true"]{background:var(--accent);color:#fff}
+.tab[aria-pressed="true"] b{color:#fff}
+.name{font:500 1.05rem var(--body);padding:12px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--fg);width:100%}
+
+/* Lernpfad */
+.path{display:flex;flex-direction:column;gap:8px}
+.step{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.step .dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:800 1rem var(--display);flex:none;background:var(--accent-soft);color:var(--accent)}
+.step.done .dot{background:var(--good);color:#fff}
+.step.practice .dot{background:var(--second-soft);color:var(--second)}
+.step.practice.done .dot{background:var(--good);color:#fff}
+.step .txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.step .txt small{color:var(--muted)}
+.step .go{color:var(--muted);font-size:1.2rem}
+.step.next{border:2px solid var(--accent)}
+
+/* Stufen */
+.stages{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.chip{text-align:left;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:var(--bg);cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.chip b{font:700 1rem var(--display)}
+.chip small{color:var(--muted);font-size:.8rem}
+.chip .ex{font-family:var(--display);font-weight:600;color:var(--fg)}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.stages .chip:last-child:nth-child(odd){grid-column:1/-1}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--gold)}
+.chip.ok .bar i{background:var(--good)}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{text-align:left;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--bg);cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.mode b{font-family:var(--display);font-size:1.05rem}
+.mode small{color:var(--muted)}
+.mode[aria-pressed="true"]{border-color:var(--second);background:var(--second-soft)}
+
+/* Kapitel */
+.chapter{display:flex;flex-direction:column;gap:14px}
+.chapter p{max-width:62ch}
+.rule{border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.rule .m{font-size:1.25rem;white-space:normal}
+.tip{background:var(--warn-soft);border-radius:12px;padding:10px 12px;font-size:.95rem}
+.example{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.example .line{font-family:var(--display);font-weight:600;font-size:1.2rem;font-variant-numeric:tabular-nums}
+.example .why{font-size:.85rem;color:var(--muted);margin-top:-2px}
+.example .line.hide,.example .why.hide{display:none}
+.example .ctrl{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.signs{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.signs div{background:var(--bg);border-radius:10px;padding:8px;text-align:center;font-family:var(--display);font-weight:600}
+.grid{display:inline-grid;gap:3px}
+.grid i{width:22px;height:22px;border-radius:4px;background:var(--accent)}
+.grid i.b{background:var(--second)}
+.area{width:100%;max-width:360px;height:auto}
+.area text{font-family:var(--display);font-weight:700;fill:var(--fg)}
+
+/* Spiel */
+.hud{display:flex;justify-content:space-between;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.hud .big{font:800 1.4rem var(--display)}
+.streak{font-weight:700;color:var(--second)}
+.track{height:14px;border-radius:7px;background:var(--second-soft);overflow:hidden}
+.track i{display:block;height:100%;background:var(--second)}
+.card{background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:18px 14px;text-align:center;display:flex;flex-direction:column;gap:8px;transition:background .15s,border-color .15s}
+.card.ok{background:var(--good-soft);border-color:var(--good)}
+.card.no{border-color:var(--bad)}
+.card.almost{border-color:var(--warn)}
+.prompt{color:var(--muted);font-weight:500}
+.task{font:800 clamp(1.7rem,7.5vw,2.6rem) var(--display);font-variant-numeric:tabular-nums;line-height:1.2;overflow-wrap:anywhere}
+.ansrow{display:flex;align-items:center;justify-content:center;gap:8px;font:700 clamp(1.5rem,6.5vw,2.2rem) var(--display);min-height:1.5em;overflow-wrap:anywhere}
+.ansrow .eq{color:var(--muted)}
+.answer{color:var(--accent);border-bottom:3px solid var(--line);min-width:3ch;padding:0 4px}
+.answer::after{content:"";display:inline-block;width:3px;height:1em;background:var(--accent);margin-left:2px;vertical-align:-.12em;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.fb{min-height:1.4em;font-weight:700}
+.card.ok .fb{color:var(--good)} .card.no .fb{color:var(--bad)} .card.almost .fb{color:var(--warn)}
+.sol{background:var(--bg);border-radius:12px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:4px}
+.sol .line{font-family:var(--display);font-weight:600;font-size:1.1rem;overflow-wrap:anywhere}
+.sol .why{font-size:.85rem;color:var(--muted)}
+.pad{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;-webkit-user-select:none;user-select:none}
+.pad button{font:700 1.45rem var(--display);padding:12px 0;border-radius:12px;border:1px solid var(--line);background:var(--surface);cursor:pointer;touch-action:manipulation}
+.pad button:active{transform:scale(.97)}
+.pad .var{color:var(--accent);font-style:italic}
+.pad .op{background:var(--bg)}
+.pad .ok{background:var(--good);color:#fff;border-color:var(--good);font-size:1.1rem}
+.pad .del{font-size:1.1rem;color:var(--muted)}
+.count{color:var(--second)}
+.pop{position:fixed;left:50%;top:36%;transform:translate(-50%,-50%);font:800 1.5rem var(--display);color:var(--gold);pointer-events:none;animation:pop .8s forwards}
+@keyframes pop{from{opacity:1;transform:translate(-50%,-50%)}to{opacity:0;transform:translate(-50%,-140%)}}
+.toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--good);color:#fff;font:800 1.05rem var(--display);padding:10px 18px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:5;max-width:calc(100% - 32px);text-align:center}
+@media (prefers-reduced-motion:reduce){.pop,.answer::after{animation:none}}
+
+/* Ergebnis / Nachweis */
+.cert{border:3px double var(--gold);border-radius:14px;padding:18px 16px;text-align:center;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.cert h2{color:var(--gold)}
+.cert .who{font:800 1.5rem var(--display)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{display:flex;flex-direction:column;gap:2px}
+.stats b{font:800 1.5rem var(--display);font-variant-numeric:tabular-nums}
+.stars{font-size:2rem;letter-spacing:4px;color:var(--gold)}
+.list{display:flex;flex-direction:column;gap:6px;text-align:left}
+.list div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.list div:last-child{border-bottom:0}
+.list .yes{color:var(--good);font-weight:700}
+.list .no{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+/* ================= Speicher ================= */
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const store = {
+  get(){ try{ return JSON.parse(localStorage.getItem('klammerprofi')||'{}') }catch(e){ return {} } },
+  set(v){ try{ localStorage.setItem('klammerprofi', JSON.stringify(v)) }catch(e){} }
+};
+let save = Object.assign({name:'', tab:'learn', done:{}, cnt:{}, best:{}, pts:0, solved:0, stage:{A:'A1',K:'K1'}, mode:{A:'train',K:'train'}}, store.get());
+const persist = () => store.set(save);
+const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rnd = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const gcd = (a,b) => { a=Math.abs(a); b=Math.abs(b); while(b){ [a,b]=[b,a%b] } return a };
+const SICHER = 10;
+
+/* ================= Polynome ================= */
+// Ein Polynom ist eine Map: Schlüssel = Variablen mit Exponent ("x2", "a1b1", "" für Zahl), Wert = Koeffizient.
+const parseKey = k => { const o={}; k.replace(/([a-z])(\d+)/g,(_,v,e)=>{ o[v]=+e }); return o };
+const keyOf = o => Object.keys(o).filter(v=>o[v]>0).sort().map(v=>v+o[v]).join('');
+const degOf = k => Object.values(parseKey(k)).reduce((a,b)=>a+b,0);
+const P = {
+  num(c){ return c ? new Map([['',c]]) : new Map() },
+  v(x){ return new Map([[x+'1',1]]) },
+  add(p,q,s=1){ const r=new Map(p); for(const [k,c] of q){ const n=(r.get(k)||0)+s*c; n ? r.set(k,n) : r.delete(k) } return r },
+  mul(p,q){ const r=new Map(); for(const [k1,c1] of p) for(const [k2,c2] of q){ const v=parseKey(k1), w=parseKey(k2); for(const x in w) v[x]=(v[x]||0)+w[x]; const k=keyOf(v), n=(r.get(k)||0)+c1*c2; n ? r.set(k,n) : r.delete(k) } return r },
+  eq(p,q){ if(p.size!==q.size) return false; for(const [k,c] of p) if(q.get(k)!==c) return false; return true }
+};
+const sortKeys = p => [...p.keys()].sort((a,b)=>degOf(b)-degOf(a) || (a===''?1:b===''?-1:a<b?-1:a>b?1:0));
+
+/* ================= Eingabe lesen ================= */
+function tokenize(s){
+  s = s.replace(/−/g,'-').replace(/[·*×]/g,'*').replace(/\s+/g,'').toLowerCase();
+  const out=[]; let i=0;
+  while(i<s.length){
+    const c=s[i];
+    if(/\d/.test(c)){ let j=i; while(j<s.length && /\d/.test(s[j])) j++; out.push({t:'num',v:+s.slice(i,j)}); i=j; continue }
+    if(/[a-z]/.test(c)){ out.push({t:'var',v:c}); i++; continue }
+    if(c==='²'){ out.push({t:'pow',v:2}); i++; continue }
+    if(c==='³'){ out.push({t:'pow',v:3}); i++; continue }
+    if(c==='^'){ const m=s.slice(i+1).match(/^\d/); if(!m) throw 'pow'; out.push({t:'pow',v:+m[0]}); i+=2; continue }
+    if('+-*()'.includes(c)){ out.push({t:c}); i++; continue }
+    throw 'zeichen';
+  }
+  return out;
+}
+function parse(s){
+  const tk=tokenize(s); let i=0;
+  const peek=()=>tk[i], eat=t=>{ if(tk[i] && tk[i].t===t){ i++; return true } return false };
+  function sum(){
+    const terms=[]; let sign=1;
+    if(eat('-')) sign=-1; else eat('+');
+    terms.push({sign, factors:product()});
+    while(peek() && (peek().t==='+'||peek().t==='-')){ const sg = tk[i++].t==='-' ? -1 : 1; terms.push({sign:sg, factors:product()}) }
+    return {type:'sum', terms};
+  }
+  function product(){
+    const f=[atom()];
+    while(peek() && (peek().t==='*' || ['num','var','('].includes(peek().t))){ eat('*'); f.push(atom()) }
+    return f;
+  }
+  function atom(){
+    const t=tk[i]; if(!t) throw 'ende';
+    let node;
+    if(t.t==='num'){ i++; node={type:'num',v:t.v} }
+    else if(t.t==='var'){ i++; node={type:'var',v:t.v} }
+    else if(t.t==='('){ i++; node={type:'group', e:sum()}; if(!eat(')')) throw 'klammer' }
+    else if(t.t==='-'){ i++; node={type:'neg', a:atom()} }
+    else throw 'unerwartet';
+    while(peek() && peek().t==='pow') node={type:'pow', a:node, n:tk[i++].v};
+    return node;
+  }
+  const r=sum(); if(i<tk.length) throw 'rest'; return r;
+}
+function polyOf(n){
+  switch(n.type){
+    case 'num': return P.num(n.v);
+    case 'var': return P.v(n.v);
+    case 'group': return polyOf(n.e);
+    case 'neg': return P.mul(P.num(-1), polyOf(n.a));
+    case 'pow': { let r=P.num(1); for(let k=0;k<n.n;k++) r=P.mul(r, polyOf(n.a)); return r }
+    case 'sum': { let r=new Map(); for(const t of n.terms){ let p=P.num(t.sign); for(const f of t.factors) p=P.mul(p, polyOf(f)); r=P.add(r,p) } return r }
+  }
+}
+const termPoly = t => { let p=P.num(t.sign); t.factors.forEach(f=>{ p=P.mul(p, polyOf(f)) }); return p };
+
+/* ================= Schreiben ================= */
+function varStr(k){ const o=parseKey(k); return Object.keys(o).sort().map(v=>v+(o[v]===1?'':o[v]===2?'²':o[v]===3?'³':'^'+o[v])).join('') }
+function monoStr(c,k,first){
+  const vs=varStr(k), a=Math.abs(c);
+  const body = (a===1 && vs) ? vs : a+vs;
+  return (c<0 ? '-' : (first?'':'+')) + body;
+}
+function polyStr(p){ const ks=sortKeys(p); return ks.length ? ks.map((k,i)=>monoStr(p.get(k),k,i===0)).join('') : '0' }
+function pretty(s){
+  let o='';
+  for(let i=0;i<s.length;i++){
+    const c=s[i], p=s[i-1];
+    if(c==='+'){ o+=' + '; continue }
+    if(c==='-'){ o += (i>0 && /[0-9a-z)²³]/.test(p)) ? ' − ' : '−'; continue }
+    if(c==='*'){ o+=' · '; continue }
+    o+=c;
+  }
+  return o;
+}
+const fac = p => { if(!p.size) return '0'; const s=pretty(polyStr(p)); return s.startsWith('−') ? `(${s})` : s };
+const live = s => s.replace(/-/g,'−').replace(/\*/g,'·');
+
+/* ================= Rechenweg ================= */
+function stepsExp(src){
+  const ast=parse(src), l1=[], parts=[];
+  ast.terms.forEach(t=>{
+    const groups=t.factors.filter(f=>f.type==='group'), rest=t.factors.filter(f=>f.type!=='group');
+    let outer=P.num(t.sign); rest.forEach(f=>{ outer=P.mul(outer, polyOf(f)) });
+    if(groups.length===1){
+      const inner=groups[0].e.terms.map(termPoly);
+      l1.push(inner.map(ip=>`${fac(outer)} · ${fac(ip)}`).join(' + '));
+      inner.forEach(ip=>parts.push(P.mul(outer,ip)));
+    } else { l1.push(fac(outer)); parts.push(outer) }
+  });
+  const line2 = pretty(parts.map((p,i)=>{ const k=[...p.keys()][0]; return k===undefined ? (i?'+0':'0') : monoStr(p.get(k),k,i===0) }).join(''));
+  const total = parts.reduce((a,p)=>P.add(a,p), new Map());
+  const out=[{line:l1.join(' + '), why:'Jeden Summanden in der Klammer mit dem Faktor davor malnehmen'}, {line:line2, why:'Ausrechnen'}];
+  const fin = pretty(polyStr(total));
+  if(fin!==line2) out.push({line:fin, why:'Gleiche Terme zusammenfassen'});
+  return out;
+}
+function factorize(p){
+  const ks=sortKeys(p);
+  let g=ks.reduce((a,k)=>gcd(a,p.get(k)),0);
+  if(p.get(ks[0])<0) g=-g;
+  const vars=new Set(ks.flatMap(k=>Object.keys(parseKey(k)))), common={};
+  vars.forEach(v=>{ common[v]=Math.min(...ks.map(k=>parseKey(k)[v]||0)) });
+  const ok=keyOf(common), outer=new Map([[ok,g]]), inner=new Map();
+  ks.forEach(k=>{ const o=parseKey(k); for(const v in common) o[v]-=common[v]; inner.set(keyOf(o), p.get(k)/g) });
+  return {g, ok, outer, inner};
+}
+function factorStr(f){
+  const o = f.ok==='' && f.g===-1 ? '-' : f.ok==='' && f.g===1 ? '' : polyStr(f.outer);
+  return pretty(`${o}(${polyStr(f.inner)})`);
+}
+function stepsFac(p){
+  const f=factorize(p), ks=sortKeys(p), out=[];
+  const nums=ks.map(k=>Math.abs(p.get(k)));
+  if(Math.abs(f.g)>1) out.push({line:`ggT(${nums.join(', ')}) = ${Math.abs(f.g)}`, why:'Größte Zahl, durch die alle Zahlen teilbar sind'});
+  else out.push({line:`Die Zahlen ${nums.join(', ')} haben keinen gemeinsamen Teiler.`, why:''});
+  if(f.ok) out.push({line:`Jeder Summand enthält ${varStr(f.ok)}`, why:`Gemeinsamer Faktor: ${pretty(polyStr(new Map([[f.ok,Math.abs(f.g)]])))}`});
+  if(f.g<0) out.push({line:`Erster Summand negativ: ${pretty(polyStr(f.outer))} ausklammern`, why:'Dann drehen sich die Vorzeichen in der Klammer um'});
+  ks.forEach(k=>{
+    const m=new Map([[k,p.get(k)]]), o=parseKey(k); for(const v in parseKey(f.ok)) o[v]-=parseKey(f.ok)[v];
+    const ik=keyOf(o);
+    out.push({line:`${pretty(polyStr(m))} = ${fac(f.outer)} · ${fac(new Map([[ik,f.inner.get(ik)]]))}`, why:''});
+  });
+  out.push({line:`= ${factorStr(f)}`, why:'Gemeinsamen Faktor vor die Klammer, den Rest hinein'});
+  return out;
+}
+
+/* ================= Antwort prüfen ================= */
+function simpleTerm(t){
+  let nums=0; const seen=new Set();
+  for(const f0 of t.factors){
+    const b = f0.type==='pow' ? f0.a : f0;
+    if(b.type==='num') nums++;
+    else if(b.type==='var'){ if(seen.has(b.v)) return false; seen.add(b.v) }
+    else return false;
+  }
+  return nums<=1;
+}
+function check(task, input){
+  let ast; try{ ast=parse(input) }catch(e){ return {state:'parse'} }
+  const p=polyOf(ast), eq=P.eq(p, task.target);
+  if(task.kind==='exp'){
+    if(input.includes('(')) return eq ? {state:'almost', msg:'Fast! In deiner Antwort steht noch eine Klammer. Löse sie ganz auf.'} : {state:'wrong'};
+    if(!eq) return {state:'wrong'};
+    if(!ast.terms.every(simpleTerm)) return {state:'almost', msg:'Richtig gerechnet! Vereinfache noch, zum Beispiel 3 · 4 = 12 oder x · x = x².'};
+    const keys=ast.terms.map(t=>{ const q=termPoly(t); return q.size ? [...q.keys()][0] : '#0' });
+    if(new Set(keys).size<keys.length) return {state:'almost', msg:'Richtig gerechnet! Fasse jetzt noch gleiche Terme zusammen.'};
+    return {state:'ok'};
+  }
+  if(!eq) return {state:'wrong'};
+  const gs = ast.terms.length===1 ? ast.terms[0].factors.filter(f=>f.type==='group') : [];
+  if(gs.length!==1 || polyOf(gs[0]).size<2) return {state:'almost', msg:'Das ist gleich viel, aber noch nicht ausgeklammert. Schreibe den gemeinsamen Faktor vor eine Klammer.'};
+  const rest = factorize(polyOf(gs[0]));
+  if(Math.abs(rest.g)>1 || rest.ok) return {state:'almost', msg:`Gut! Aber in der Klammer steckt noch der Faktor ${pretty(polyStr(new Map([[rest.ok,Math.abs(rest.g)]])))}. Klammere ihn auch aus.`};
+  return {state:'ok'};
+}
+
+/* ================= Aufgaben erzeugen ================= */
+const V = () => pick(['x','x','x','a','b']);
+const ms = (c,v) => c===1&&v ? v : c===-1&&v ? '-'+v : c+v;
+const sumStr = arr => arr.map(([c,v],i)=>{ const s=ms(c,v); return i>0 && c>0 ? '+'+s : s }).join('');
+const pm = () => pick([1,-1]);
+function makeTask(kind, src, prompt){
+  const target = polyOf(parse(src));
+  return {kind, src, target, show:pretty(src), prompt: prompt || (kind==='exp' ? 'Löse die Klammer auf:' : 'Klammere aus:')};
+}
+function genA(stage){
+  const k=rnd(2,9), v=V(), m=pick([1,1,2,3,4,5]), b=rnd(1,9);
+  if(stage==='A1'){
+    const inner = Math.random()<.75 ? [[m,v],[b,'']] : [[b,''],[m,v]];
+    return makeTask('exp', `${k}(${sumStr(inner)})`);
+  }
+  if(stage==='A2'){
+    const w=rnd(0,4);
+    if(w===0) return makeTask('exp', `${k}(${sumStr([[m,v],[-b,'']])})`);
+    if(w===1) return makeTask('exp', `-${k}(${sumStr([[m,v],[b,'']])})`);
+    if(w===2) return makeTask('exp', `-${k}(${sumStr([[m,v],[-b,'']])})`);
+    if(w===3) return makeTask('exp', `-(${sumStr([[1,v],[pm()*b,'']])})`);
+    return makeTask('exp', `${k}(${sumStr([[b,''],[-m,v]])})`);
+  }
+  if(stage==='A3'){
+    const w=rnd(0,3), k2=rnd(2,5);
+    if(w===0) return makeTask('exp', `${v}(${sumStr([[1,v],[pm()*b,'']])})`);
+    if(w===1) return makeTask('exp', `${k2}${v}(${sumStr([[m,v],[pm()*b,'']])})`);
+    if(w===2) return makeTask('exp', `a(${sumStr([[1,'b'],[pm()*b,'']])})`);
+    return makeTask('exp', `-${v}(${sumStr([[1,v],[-b,'']])})`);
+  }
+  // A4: mehrere Klammern, danach zusammenfassen
+  for(let tries=0; tries<20; tries++){
+    const k1=rnd(2,6), k2=rnd(2,6), b1=rnd(1,9), b2=rnd(1,9), mm=rnd(2,7), w=rnd(0,3);
+    const src = w===0 ? `${k1}(x+${b1})+${k2}(x-${b2})`
+              : w===1 ? `${k1}(x+${b1})-${k2}(x+${b2})`
+              : w===2 ? `${k1}(x+${b1})+${mm}x`
+              :         `${mm}x-${k1}(x-${b1})`;
+    const t=makeTask('exp', src, 'Löse auf und fasse zusammen:');
+    if(t.target.size===2) return t;
+  }
+  return makeTask('exp','3(x+2)+2(x-1)','Löse auf und fasse zusammen:');
+}
+function coprimePair(maxM=6){ let m,n; do{ m=rnd(1,maxM); n=rnd(1,9) } while(gcd(m,n)!==1); return [m,n] }
+function facFrom(outer, inner){ const p=polyOf(parse(`${outer}(${inner})`)); return makeTask('fac', polyStr(p)) }
+function genK(stage){
+  const g=rnd(2,9), v=V();
+  if(stage==='K1'){ const [m,n]=coprimePair(4); return facFrom(String(rnd(2,6)), sumStr([[m,v],[n,'']])) }
+  if(stage==='K2'){
+    const w=rnd(0,2);
+    if(w===0){ const [m,n]=coprimePair(); return facFrom(String(g), sumStr([[m,v],[-n,'']])) }
+    if(w===1){ const [m,n]=coprimePair(); return facFrom('-'+g, sumStr([[m,v],[n,'']])) }
+    let a,b,c; do{ a=rnd(1,5); b=rnd(1,5); c=rnd(1,9) } while(gcd(gcd(a,b),c)!==1);
+    return facFrom(String(rnd(2,6)), sumStr([[a,'a'],[b,'b'],[-c,'']]));
+  }
+  const w=rnd(0,3), g2=rnd(2,5), n=rnd(1,9);
+  if(w===0) return facFrom(v, sumStr([[1,v],[pm()*n,'']]));
+  if(w===1){ const [m,nn]=coprimePair(5); return facFrom(g2+v, sumStr([[m,v],[pm()*nn,'']])) }
+  if(w===2) return facFrom('a', sumStr([[1,'b'],[n,'']]));
+  return facFrom(g2+'a', sumStr([[1,'b'],[-n,'']]));
+}
+
+/* ================= Inhalte ================= */
+const STAGES = {
+  A:[{id:'A1',name:'Einfach',ex:'3(x + 4)'},{id:'A2',name:'Mit Minus',ex:'−2(x − 5)'},{id:'A3',name:'Variable davor',ex:'x(x + 3)'},{id:'A4',name:'Zusammenfassen',ex:'2(x + 1) + 3(x − 2)'}],
+  K:[{id:'K1',name:'Zahl ausklammern',ex:'6x + 9'},{id:'K2',name:'Mit Minus',ex:'12x − 8'},{id:'K3',name:'Variable ausklammern',ex:'x² + 5x'}]
+};
+const BEREICH = {A:{title:'Klammern auflösen', short:'Auflösen', gen:genA}, K:{title:'Ausklammern', short:'Ausklammern', gen:genK}};
+const allStages = () => [...STAGES.A, ...STAGES.K];
+const stageOf = id => allStages().find(s=>s.id===id);
+
+const gridHTML = (rows, a, b) => `<div class="grid" style="grid-template-columns:repeat(${a+b},22px)">${Array.from({length:rows*(a+b)},(_,i)=>`<i class="${i%(a+b)>=a?'b':''}"></i>`).join('')}</div>`;
+const areaX = `<svg class="area" viewBox="0 0 360 170" role="img" aria-label="Rechteck 3 mal (x + 4), geteilt in 3 mal x und 3 mal 4">
+  <text x="105" y="22" text-anchor="middle">x</text><text x="270" y="22" text-anchor="middle">4</text><text x="14" y="104" text-anchor="middle">3</text>
+  <rect x="30" y="34" width="150" height="120" rx="6" style="fill:var(--accent)"/>
+  <rect x="186" y="34" width="168" height="120" rx="6" style="fill:var(--second)"/>
+  <text x="105" y="102" text-anchor="middle" style="fill:#fff">3 · x</text><text x="270" y="102" text-anchor="middle" style="fill:#fff">3 · 4</text></svg>`;
+
+const CHAPTERS = [
+ {title:'Die Idee: Verteilen', short:'Malnehmen in Teilen', html:`
+   <p>Schau dir das Rechteck an: Es ist <b>4 Kästchen hoch</b> und <b>3 + 5 Kästchen breit</b>.</p>
+   ${gridHTML(4,3,5)}
+   <p>Wie viele Kästchen sind es? Du kannst auf zwei Arten rechnen:</p>
+   <div class="example"><span class="label">Weg 1: erst die Klammer</span><span class="line">4 · (3 + 5) = 4 · 8 = 32</span></div>
+   <div class="example"><span class="label">Weg 2: beide Teile einzeln</span><span class="line">4 · 3 + 4 · 5 = 12 + 20 = 32</span></div>
+   <div class="rule"><span class="label">Distributivgesetz</span><span class="m">a · (b + c) = a · b + a · c</span><span>Der Faktor vor der Klammer wird auf <b>jeden Summanden</b> in der Klammer verteilt.</span></div>
+   <p>Damit kannst du sogar schwierige Aufgaben leicht im Kopf rechnen.</p>`,
+  examples:[[{line:'7 · (10 + 3)'},{line:'= 7 · 10 + 7 · 3', why:'Die 7 mit jeder Zahl in der Klammer malnehmen'},{line:'= 70 + 21'},{line:'= 91'}],
+            [{line:'6 · 99 = 6 · (100 − 1)', why:'Trick: 99 ist 100 − 1'},{line:'= 6 · 100 − 6 · 1'},{line:'= 600 − 6 = 594'}]],
+  tasks:[['exp','5*(10+2)','Rechne mit dem Distributivgesetz:'],['exp','8*(10+4)','Rechne mit dem Distributivgesetz:'],['exp','4*(100-2)','Rechne mit dem Distributivgesetz:']]},
+ {title:'Klammern mit Variablen', short:'3(x + 4) = 3x + 12', html:`
+   <p>Jetzt ist eine Seite des Rechtecks <b>x</b> lang. Wir wissen nicht, wie groß x ist. Deshalb können wir die Klammer nicht zuerst ausrechnen.</p>
+   ${areaX}
+   <p>Aber wir können die 3 verteilen, genau wie vorher:</p>
+   <div class="rule"><span class="m">3(x + 4) = 3 · x + 3 · 4 = 3x + 12</span></div>
+   <div class="tip">Den Malpunkt vor einer Klammer darf man weglassen: <span class="m">3(x + 4)</span> heißt <span class="m">3 · (x + 4)</span>. Genauso ist <span class="m">3x</span> dasselbe wie <span class="m">3 · x</span>.</div>`,
+  examples:[[{line:'5(2x + 3)'},{line:'= 5 · 2x + 5 · 3', why:'Die 5 mit jedem Summanden malnehmen'},{line:'= 10x + 15', why:'5 · 2x = 10x, denn 5 · 2 = 10'}]],
+  tasks:[['exp','2(x+5)'],['exp','4(2x+3)'],['exp','6(a+1)']]},
+ {title:'Vorsicht, Minus!', short:'Vorzeichenregeln', html:`
+   <p>Wenn ein Minus im Spiel ist, musst du auf die Vorzeichen achten. Es gelten die Regeln fürs Malnehmen:</p>
+   <div class="signs"><div>+ mal + = +</div><div>− mal − = +</div><div>+ mal − = −</div><div>− mal + = −</div></div>
+   <div class="tip">Am sichersten: Nimm das Vorzeichen immer mit. Bei <span class="m">−3(x + 2)</span> rechnest du mit <span class="m">(−3)</span>.</div>
+   <div class="rule"><span class="label">Nur ein Minus vor der Klammer</span><span class="m">−(x − 4) = −x + 4</span><span>Das Minus wirkt wie <span class="m">−1 ·</span>. Alle Vorzeichen in der Klammer drehen sich um.</span></div>`,
+  examples:[[{line:'2(x − 3)'},{line:'= 2 · x + 2 · (−3)', why:'Das Minus gehört zur 3'},{line:'= 2x − 6'}],
+            [{line:'−3(x + 2)'},{line:'= (−3) · x + (−3) · 2'},{line:'= −3x − 6', why:'− mal + = −'}],
+            [{line:'−2(x − 5)'},{line:'= (−2) · x + (−2) · (−5)'},{line:'= −2x + 10', why:'− mal − = +'}]],
+  tasks:[['exp','5(x-2)'],['exp','-4(x+3)'],['exp','-2(x-6)'],['exp','-(x-7)']]},
+ {title:'Variablen vor der Klammer', short:'x(x + 3) = x² + 3x', html:`
+   <p>Auch eine Variable kann vor der Klammer stehen. Dann gilt genau dieselbe Regel.</p>
+   <div class="tip">Erinnerung: <span class="m">x · x = x²</span> &nbsp;und&nbsp; <span class="m">2x · 3x = 6x²</span> (Zahlen malnehmen, Variablen malnehmen). Verschiedene Variablen schreibt man nebeneinander: <span class="m">a · b = ab</span>.</div>`,
+  examples:[[{line:'x(x + 3)'},{line:'= x · x + x · 3'},{line:'= x² + 3x', why:'x · 3 schreibt man als 3x'}],
+            [{line:'2a(3a − 4)'},{line:'= 2a · 3a + 2a · (−4)'},{line:'= 6a² − 8a'}],
+            [{line:'a(b + 5)'},{line:'= a · b + a · 5'},{line:'= ab + 5a'}]],
+  tasks:[['exp','x(x+5)'],['exp','3x(2x-1)'],['exp','a(b-4)']]},
+ {title:'Auflösen und zusammenfassen', short:'Mehrere Klammern', html:`
+   <p>Oft stehen mehrere Klammern in einem Term. So gehst du vor:</p>
+   <div class="rule"><span><b>1.</b> Jede Klammer einzeln auflösen.</span><span><b>2.</b> Gleiche Terme zusammenfassen: x-Terme zu x-Termen, Zahlen zu Zahlen.</span></div>
+   <div class="tip">Steht ein Minus vor der zweiten Klammer, gehört es zum Faktor: Bei <span class="m">− 2(x + 5)</span> rechnest du mit <span class="m">(−2)</span>.</div>`,
+  examples:[[{line:'3(x + 2) + 2(x − 1)'},{line:'= 3x + 6 + 2x − 2', why:'Beide Klammern auflösen'},{line:'= 5x + 4', why:'3x + 2x = 5x und 6 − 2 = 4'}],
+            [{line:'4(x + 3) − 2(x + 5)'},{line:'= 4x + 12 − 2x − 10', why:'(−2) · 5 = −10'},{line:'= 2x + 2'}]],
+  tasks:[['exp','2(x+4)+3(x+1)','Löse auf und fasse zusammen:'],['exp','5(x+2)-3(x+1)','Löse auf und fasse zusammen:'],['exp','4(x-1)+2x','Löse auf und fasse zusammen:']]},
+ {title:'Ausklammern: der Weg zurück', short:'6x + 9 = 3(2x + 3)', html:`
+   <p>Ausklammern ist das Gegenteil von Ausmultiplizieren. Du suchst den Faktor, der in <b>jedem</b> Summanden steckt, und schreibst ihn vor die Klammer.</p>
+   <div class="rule"><span class="label">So geht's</span><span><b>1.</b> Finde die größte Zahl, durch die alle Zahlen teilbar sind (ggT).</span><span><b>2.</b> Teile jeden Summanden durch diese Zahl.</span><span><b>3.</b> Schreibe die Zahl vor die Klammer und die Ergebnisse hinein.</span><span><b>4.</b> Probe: Wieder auflösen, dann muss der Anfangsterm herauskommen.</span></div>
+   <div class="tip">Nimm immer den <b>größten</b> gemeinsamen Faktor. <span class="m">8x + 12 = 2(4x + 6)</span> stimmt zwar, aber in der Klammer steckt noch eine 2. Fertig ist erst <span class="m">4(2x + 3)</span>.</div>`,
+  examples:[[{line:'6x + 9'},{line:'ggT(6, 9) = 3', why:'6 und 9 sind beide durch 3 teilbar'},{line:'6x : 3 = 2x  und  9 : 3 = 3', why:'Jeden Summanden durch 3 teilen'},{line:'= 3(2x + 3)'},{line:'Probe: 3 · 2x + 3 · 3 = 6x + 9 ✓'}],
+            [{line:'12x − 8'},{line:'ggT(12, 8) = 4'},{line:'12x : 4 = 3x  und  −8 : 4 = −2'},{line:'= 4(3x − 2)'}]],
+  tasks:[['fac','4x+10'],['fac','12x-8'],['fac','5x+15']]},
+ {title:'Variablen und Minus ausklammern', short:'x² + 5x = x(x + 5)', html:`
+   <p>Steckt in jedem Summanden dieselbe Variable, kannst du auch sie ausklammern.</p>
+   <div class="rule"><span class="m">x² + 5x = x · x + 5 · x = x(x + 5)</span></div>
+   <p>Oft klammert man eine Zahl und eine Variable zusammen aus:</p>
+   <div class="rule"><span class="m">6x² − 9x = 3x(2x − 3)</span><span>Zahl: ggT(6, 9) = 3. Variable: Beide Summanden enthalten x. Zusammen: 3x.</span></div>
+   <div class="tip">Ist der erste Summand negativ, klammert man meistens das Minus mit aus. Dann drehen sich die Vorzeichen in der Klammer um: <span class="m">−4x − 8 = −4(x + 2)</span>.</div>`,
+  examples:[[{line:'10a² + 15a'},{line:'ggT(10, 15) = 5', why:'Zahl'},{line:'Beide Summanden enthalten a', why:'Variable'},{line:'10a² : 5a = 2a  und  15a : 5a = 3'},{line:'= 5a(2a + 3)'}],
+            [{line:'−3x − 12'},{line:'Erster Summand negativ: −3 ausklammern'},{line:'−3x : (−3) = x  und  −12 : (−3) = 4'},{line:'= −3(x + 4)'}]],
+  tasks:[['fac','x²-7x'],['fac','10a²+15a'],['fac','-3x-12'],['fac','ab+4a']]}
+];
+
+/* Lernpfad: Kapitel 1–5, Üben Auflösen, Kapitel 6–7, Üben Ausklammern, Minutentest */
+const PATH = [
+  {ch:0},{ch:1},{ch:2},{ch:3},{ch:4},
+  {practice:'A', title:'Üben: Klammern auflösen', sub:'Stufen A1 bis A4'},
+  {ch:5},{ch:6},
+  {practice:'K', title:'Üben: Ausklammern', sub:'Stufen K1 bis K3'},
+  {test:true, title:'Minutentest', sub:'So viele Aufgaben wie möglich in 60 Sekunden'}
+];
+const cntOf = id => save.cnt[id]||0;
+const sicherIn = b => STAGES[b].filter(s=>cntOf(s.id)>=SICHER).length;
+const anyBest = () => Object.values(save.best).some(v=>v>0);
+
+/* ================= Startseite ================= */
+function home(){
+  const tab = save.tab;
+  let body='';
+  if(tab==='learn'){
+    let nextMarked=false;
+    body = `<section class="panel">
+      <div><span class="label">Dein Lernpfad</span><p class="note">Geh die Schritte der Reihe nach durch. Jedes Kapitel erklärt dir eine Regel, danach probierst du sie selbst aus.</p></div>
+      <div class="path">${PATH.map((p,i)=>{
+        let done, title, sub, num, cls='';
+        if(p.ch!==undefined){ done=!!save.done[p.ch]; title=CHAPTERS[p.ch].title; sub=`Kapitel ${p.ch+1} · ${CHAPTERS[p.ch].short}`; num=p.ch+1 }
+        else if(p.practice){ const s=sicherIn(p.practice), n=STAGES[p.practice].length; done=s===n; title=p.title; sub=`${s} von ${n} Stufen geschafft`; num='✎'; cls='practice' }
+        else { done=anyBest(); title=p.title; sub=p.sub; num='⏱'; cls='practice' }
+        const isNext = !done && !nextMarked; if(isNext) nextMarked=true;
+        return `<button class="step ${cls} ${done?'done':''} ${isNext?'next':''}" data-path="${i}"><span class="dot">${done?'✓':num}</span><span class="txt"><b>${esc(title)}</b><small>${esc(sub)}${isNext?' · als Nächstes':''}</small></span><span class="go">›</span></button>`;
+      }).join('')}</div>
+    </section>`;
+  } else {
+    const b = tab, st = save.stage[b], mode = save.mode[b];
+    body = `<section class="panel">
+      <span class="label">Stufe wählen</span>
+      <div class="stages">${STAGES[b].map(s=>{ const c=Math.min(cntOf(s.id),SICHER); return `<button class="chip ${c>=SICHER?'ok':''}" aria-pressed="${st===s.id}" data-st="${s.id}"><b>${s.id} · ${s.name}</b><span class="ex">${s.ex}</span><small>${c>=SICHER?'✓ geschafft':`${c} von ${SICHER} richtig`}</small><span class="bar"><i style="width:${c/SICHER*100}%"></i></span></button>` }).join('')}</div>
+      <p class="note">Eine Stufe ist geschafft, wenn du ${SICHER} Aufgaben daraus auf Anhieb richtig gelöst hast.</p>
+      <span class="label">Modus</span>
+      <div class="modes">
+        <button class="mode" data-m="train" aria-pressed="${mode==='train'}"><b>✎ Üben</b><small>12 Aufgaben ohne Zeitdruck. Bei Fehlern siehst du den Rechenweg.</small></button>
+        <button class="mode" data-m="sprint" aria-pressed="${mode==='sprint'}"><b>⏱ Minutentest</b><small>60 Sekunden. Rekord auf ${st}: ${save.best[st]||0}</small></button>
+      </div>
+      <button class="btn" id="go">Los geht's: ${st} ${esc(stageOf(st).name)}</button>
+    </section>`;
+  }
+  app.innerHTML = `
+    <header><h1>Klammer-<span>Profi</span></h1><p class="sub">Terme mit dem Distributivgesetz</p></header>
+    <nav class="tabs" aria-label="Bereich">
+      <button class="tab" data-tab="learn" aria-pressed="${tab==='learn'}"><b>Lernen</b>${Object.keys(save.done).length} von ${CHAPTERS.length} Kapiteln</button>
+      <button class="tab" data-tab="A" aria-pressed="${tab==='A'}"><b>Auflösen</b>${sicherIn('A')} von 4 Stufen</button>
+      <button class="tab" data-tab="K" aria-pressed="${tab==='K'}"><b>Ausklammern</b>${sicherIn('K')} von 3 Stufen</button>
+    </nav>
+    ${body}
+    <section class="panel">
+      <label class="label" for="name">Dein Vorname</label>
+      <input class="name" id="name" maxlength="24" autocomplete="off" placeholder="z. B. Lena" value="${esc(save.name)}">
+      <button class="btn ghost" id="proof">Mein Nachweis anzeigen</button>
+      <p class="note">Dein Fortschritt wird auf diesem Gerät gespeichert. Am Ende zeigst du deinen Nachweis vor.</p>
+    </section>`;
+  app.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{ save.tab=b.dataset.tab; persist(); home() });
+  app.querySelectorAll('[data-path]').forEach(b=>b.onclick=()=>{
+    const p=PATH[+b.dataset.path];
+    if(p.ch!==undefined) return chapter(p.ch);
+    if(p.practice){ save.tab=p.practice; save.mode[p.practice]='train'; persist(); return home() }
+    const b2 = sicherIn('K')>0 || save.done[5] ? 'K' : 'A'; save.tab=b2; save.mode[b2]='sprint'; persist(); home();
+  });
+  app.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ save.stage[tab]=b.dataset.st; persist(); home() });
+  app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ save.mode[tab]=b.dataset.m; persist(); home() });
+  const go=$('#go'); if(go) go.onclick=()=>startGame({type:save.mode[tab], bereich:tab, stage:save.stage[tab]});
+  $('#name').oninput = e => { save.name=e.target.value.trim(); persist() };
+  $('#proof').onclick = proof;
+  window.scrollTo(0,0);
+}
+
+/* ================= Kapitel ================= */
+function chapter(n){
+  const c=CHAPTERS[n];
+  app.innerHTML = `
+    <div class="hud"><button class="btn ghost small" id="back">‹ Übersicht</button><span class="label">Kapitel ${n+1} von ${CHAPTERS.length}</span></div>
+    <article class="chapter">
+      <h2>${c.title}</h2>
+      ${c.html}
+      <h3>Beispiel${c.examples.length>1?'e':''}: Schritt für Schritt</h3>
+      ${c.examples.map((ex,ei)=>`<div class="example" data-ex="${ei}">
+        ${ex.map((s,si)=>`<span class="line ${si>0?'hide':''}">${s.line}</span>${s.why?`<span class="why ${si>0?'hide':''}">${s.why}</span>`:''}`).join('')}
+        ${ex.length>1?`<div class="ctrl"><button class="btn small" data-next="${ei}">Nächster Schritt</button></div>`:''}
+      </div>`).join('')}
+      <div class="panel"><h3>Jetzt du!</h3><p>Löse ${c.tasks.length} Aufgaben. Wenn etwas nicht klappt, zeigt dir das Tool den Rechenweg.</p>
+      <button class="btn" id="try">${save.done[n]?'Nochmal üben':'Aufgaben starten'}</button></div>
+    </article>`;
+  $('#back').onclick=home;
+  app.querySelectorAll('[data-next]').forEach(b=>b.onclick=()=>{
+    const box=b.closest('.example'), hidden=box.querySelectorAll('.line.hide');
+    if(!hidden.length) return;
+    const line=hidden[0]; line.classList.remove('hide');
+    const why=line.nextElementSibling; if(why && why.classList.contains('why')) why.classList.remove('hide');
+    if(hidden.length===1) b.remove();
+  });
+  $('#try').onclick=()=>startGame({type:'tut', chapter:n, list:c.tasks.map(([k,s,pr])=>makeTask(k,s,pr))});
+  window.scrollTo(0,0);
+}
+
+/* ================= Spiel ================= */
+let G=null, tick=null, cd=null;
+const KEYS = ['7','8','9','x','del','4','5','6','a','(','1','2','3','b',')','0','+','-','²','ok'];
+function keyLabel(k){ return k==='del'?'⌫' : k==='ok'?'OK' : k==='-'?'−' : k }
+function startGame(cfg){
+  G = Object.assign({score:0, correct:0, wrong:0, streak:0, bestStreak:0, count:0, input:'', locked:false, misses:[], total:60, left:60, last:''}, cfg);
+  G.max = cfg.type==='tut' ? cfg.list.length : cfg.type==='train' ? 12 : Infinity;
+  app.innerHTML = `
+    <div class="hud"><button class="btn ghost small" id="quit" aria-label="Beenden">✕</button><span class="streak" id="streak"></span><span class="big" id="score">0</span></div>
+    ${G.type==='sprint'?`<div class="track" aria-label="Zeit"><i id="tbar" style="width:100%"></i></div>`:`<div class="note" id="prog"></div>`}
+    <div class="card" id="card">
+      <div class="prompt" id="prompt"></div>
+      <div class="task" id="q"></div>
+      <div class="ansrow"><span class="eq">=</span><span class="answer" id="ans"></span></div>
+      <div class="fb" id="fb" role="status"></div>
+      <div id="help"></div>
+    </div>
+    <div class="pad" id="pad">${KEYS.map(k=>`<button data-k="${k}" class="${/^[xab]$/.test(k)?'var':'+-()²'.includes(k)?'op':k==='ok'?'ok':k==='del'?'del':''}" aria-label="${k==='del'?'Löschen':k==='-'?'Minus':k==='²'?'hoch 2':k}">${keyLabel(k)}</button>`).join('')}</div>
+    <p class="note">Tipp: Für x² tippst du <b>x</b> und dann <b>²</b>. Malpunkte brauchst du nicht: 3x heißt 3 · x.</p>`;
+  app.querySelectorAll('#pad button').forEach(b=>b.onclick=()=>key(b.dataset.k));
+  $('#quit').onclick=()=>{ stopGame(); G.type==='tut' ? chapter(G.chapter) : home() };
+  window.scrollTo(0,0);
+  if(G.type!=='sprint'){ next(); return }
+  G.locked=true; let n=3;
+  $('#q').innerHTML=`<span class="count">3</span>`; $('#fb').textContent='Mach dich bereit …';
+  const step=()=>{ if(!G) return; n--; if(n>0){ $('#q').innerHTML=`<span class="count">${n}</span>`; cd=setTimeout(step,800); return } next(); runClock() };
+  cd=setTimeout(step,800);
+}
+function stopGame(){ clearInterval(tick); clearTimeout(cd); }
+function runClock(){
+  const t0=performance.now();
+  tick=setInterval(()=>{
+    if(!G) return;
+    G.left=Math.max(0, G.total-(performance.now()-t0)/1000);
+    $('#tbar').style.width=(G.left/G.total*100)+'%';
+    if(G.left<=0) end();
+  },100);
+}
+function next(){
+  let t;
+  if(G.type==='tut') t=G.list[G.count];
+  else { let tries=0; do{ t=BEREICH[G.bereich].gen(G.stage); tries++ } while(t.src===G.last && tries<8) }
+  G.cur=t; G.last=t.src; G.input=''; G.locked=false; G.count++;
+  $('#prompt').textContent=t.prompt; $('#q').textContent=t.show;
+  $('#ans').textContent=''; $('#fb').textContent=''; $('#help').innerHTML=''; $('#card').className='card';
+  if(G.type!=='sprint') $('#prog').textContent = G.type==='tut' ? `Kapitel ${G.chapter+1} · Aufgabe ${G.count} von ${G.max}` : `${G.stage} · Aufgabe ${G.count} von ${G.max}`;
+}
+function key(k){
+  if(!G || G.locked) return;
+  if(k==='del') G.input=G.input.slice(0,-1);
+  else if(k==='ok'){ if(G.input.trim()) submit(); return }
+  else if(G.input.length<40) G.input+=k;
+  $('#ans').textContent=live(G.input);
+  if($('#card').classList.contains('almost')){ $('#card').className='card'; $('#fb').textContent='' }
+}
+function solutionHTML(t){
+  const steps = t.kind==='exp' ? stepsExp(t.src) : stepsFac(t.target);
+  return `<div class="sol"><span class="label">So geht's</span><span class="line">${t.show}</span>${steps.map(s=>`<span class="line">${t.kind==='exp'?'= ':''}${s.line}</span>${s.why?`<span class="why">${s.why}</span>`:''}`).join('')}</div>`;
+}
+function submit(){
+  const t=G.cur, r=check(t, G.input);
+  if(r.state==='parse'){ $('#card').className='card almost'; $('#fb').textContent='Das kann ich nicht lesen. Prüfe Klammern und Rechenzeichen.'; return }
+  if(r.state==='almost'){ $('#card').className='card almost'; $('#fb').textContent=r.msg; return }
+  G.locked=true;
+  if(r.state==='ok'){
+    if(t.retry){ $('#card').className='card ok'; $('#fb').textContent='Genau, jetzt stimmt es!'; return later(1200) }
+    G.correct++; G.streak++; G.bestStreak=Math.max(G.bestStreak,G.streak); save.solved=(save.solved||0)+1;
+    const pts = 10 + (G.streak>=3?5:0); G.score+=pts; popup('+'+pts);
+    if(G.type!=='tut'){
+      const before=cntOf(G.stage); save.cnt[G.stage]=before+1;
+      if(before+1===SICHER) toast(`Stufe ${G.stage} geschafft ✓`);
+    }
+    persist();
+    $('#card').className='card ok'; $('#fb').textContent=pick(['Richtig!','Super!','Stark gerechnet!','Genau so!']);
+    later(G.type==='sprint'?500:900);
+  } else {
+    G.wrong++; G.streak=0; G.misses.push(`${t.show} = ${t.kind==='exp'?pretty(polyStr(t.target)):factorStr(factorize(t.target))}`);
+    $('#card').className='card no';
+    $('#help').innerHTML=solutionHTML(t);
+    if(G.type==='sprint'){ $('#fb').textContent='Leider falsch.'; return later(3000) }
+    $('#fb').textContent='Noch nicht. Schau dir den Rechenweg an und tippe dann die Lösung ein.';
+    t.retry=true; G.input=''; $('#ans').textContent=''; G.locked=false;
+  }
+  $('#score').textContent=G.score;
+  $('#streak').textContent = G.streak>=3 ? `🔥 ${G.streak} in Folge` : '';
+}
+function later(ms){
+  $('#score').textContent=G.score;
+  $('#streak').textContent = G.streak>=3 ? `🔥 ${G.streak} in Folge` : '';
+  setTimeout(()=>{ if(!G) return; if(G.type==='sprint'){ if(G.left>0) next(); return } if(G.count>=G.max) return end(); next() }, ms);
+}
+function popup(t){ const p=document.createElement('div'); p.className='pop'; p.textContent=t; document.body.appendChild(p); setTimeout(()=>p.remove(),800) }
+function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600) }
+document.addEventListener('keydown',e=>{
+  if(!G || !$('#ans') || e.target.tagName==='INPUT') return;
+  const k=e.key;
+  if(/^[0-9]$/.test(k) || /^[xab]$/i.test(k) || '+-()'.includes(k)) { key(k.toLowerCase()); e.preventDefault() }
+  else if(k==='^' || k==='²') key('²');
+  else if(k==='Backspace'){ key('del'); e.preventDefault() }
+  else if(k==='Enter') key('ok');
+});
+
+/* ================= Ergebnis ================= */
+function end(){
+  stopGame();
+  const g=G; G=null;
+  const total=g.correct+g.wrong, quote= total ? g.correct/total : 0;
+  const stars=(quote>=.6?1:0)+(quote>=.8?1:0)+(quote>=.95?1:0);
+  let rec=false, chapterDone=false;
+  if(g.type==='sprint' && g.correct>(save.best[g.stage]||0)){ save.best[g.stage]=g.correct; rec=true }
+  if(g.type==='tut' && !save.done[g.chapter]){ save.done[g.chapter]=true; chapterDone=true }
+  save.pts=(save.pts||0)+g.score; persist();
+  const title = g.type==='tut' ? `Kapitel ${g.chapter+1}: ${CHAPTERS[g.chapter].title}` : `${g.stage} ${stageOf(g.stage).name} · ${g.type==='sprint'?'Minutentest':'Üben'}`;
+  const nextBtn = g.type==='tut'
+    ? (g.chapter+1<CHAPTERS.length ? `<button class="btn" id="nextch">Weiter zu Kapitel ${g.chapter+2}</button>` : `<button class="btn" id="toK">Jetzt Ausklammern üben</button>`)
+    : `<button class="btn" id="again">Nochmal</button>`;
+  app.innerHTML = `
+    <section class="cert">
+      <span class="label">${g.type==='tut'?'Kapitel geschafft':'Ergebnis'}</span>
+      <h2>${esc(title)}</h2>
+      <div class="who">${esc(save.name||'Ohne Namen')}</div>
+      <div>hat <b>${g.correct} von ${total}</b> Aufgaben auf Anhieb richtig gelöst${g.type==='sprint'?' – in 60 Sekunden':''}.</div>
+      <div class="stars" aria-label="${stars} von 3 Sternen">${'★'.repeat(stars)}${'☆'.repeat(3-stars)}</div>
+      <div class="note">${new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}, ${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr</div>
+      ${rec?'<div><b style="color:var(--gold)">Neuer Rekord!</b></div>':''}
+      ${chapterDone && g.chapter===4 ? '<div class="note">Tipp: Übe jetzt im Bereich „Auflösen“, bevor du mit Kapitel 6 weitermachst.</div>':''}
+    </section>
+    ${g.misses.length?`<section class="panel"><span class="label">Diese Aufgaben solltest du dir nochmal ansehen</span><div class="list">${[...new Set(g.misses)].map(m=>`<div><span class="m">${m}</span></div>`).join('')}</div></section>`:''}
+    ${nextBtn}
+    <button class="btn ghost" id="back">Zur Übersicht</button>`;
+  $('#back').onclick=home;
+  const a=$('#again'); if(a) a.onclick=()=>startGame({type:g.type, bereich:g.bereich, stage:g.stage});
+  const nc=$('#nextch'); if(nc) nc.onclick=()=>chapter(g.chapter+1);
+  const tk=$('#toK'); if(tk) tk.onclick=()=>{ save.tab='K'; save.mode.K='train'; persist(); home() };
+  window.scrollTo(0,0);
+}
+
+/* ================= Nachweis ================= */
+function proof(){
+  const d=new Date();
+  app.innerHTML = `
+    <section class="cert">
+      <span class="label">Nachweis · Klammer-Profi</span>
+      <div class="who">${esc(save.name||'Bitte Vornamen eintragen')}</div>
+      <div class="note">Stand: ${d.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}, ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr</div>
+      <div class="stats"><div><span class="label">Kapitel</span><b>${Object.keys(save.done).length}/${CHAPTERS.length}</b></div><div><span class="label">Stufen</span><b>${sicherIn('A')+sicherIn('K')}/7</b></div><div><span class="label">Gelöst</span><b>${save.solved||0}</b></div></div>
+      <span class="label" style="margin-top:6px">Kapitel</span>
+      <div class="list">${CHAPTERS.map((c,i)=>`<div><span>${i+1}. ${c.title}</span><span class="${save.done[i]?'yes':'no'}">${save.done[i]?'✓':'–'}</span></div>`).join('')}</div>
+      <span class="label" style="margin-top:6px">Stufen · richtig gelöst · Rekord Minutentest</span>
+      <div class="list">${allStages().map(s=>`<div><span>${s.id} ${s.name}</span><span class="${cntOf(s.id)>=SICHER?'yes':'no'}">${cntOf(s.id)}${cntOf(s.id)>=SICHER?' ✓':''} · ${save.best[s.id]||0}</span></div>`).join('')}</div>
+    </section>
+    <p class="note">Mach einen Screenshot von diesem Nachweis und gib ihn deiner Lehrkraft.</p>
+    <button class="btn" id="back">Zurück</button>`;
+  $('#back').onclick=home;
+  window.scrollTo(0,0);
+}
+
+home();
+</script>
+</body>
+</html>
