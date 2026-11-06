@@ -130,7 +130,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 .pad button:active{transform:scale(.97)}
 .pad .var{color:var(--accent);font-style:italic}
 .pad .op{background:var(--bg)}
-.pad .ok{background:var(--good);color:#fff;border-color:var(--good);font-size:1.1rem;grid-column:span 4}
+.pad .ok{background:var(--good);color:#fff;border-color:var(--good);font-size:1.1rem;grid-column:span 3}
 .hintbtn{align-self:center;border:2px solid var(--line);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer;font:500 .95rem var(--body)}
 .pad .del{font-size:1.1rem;color:var(--muted)}
 .count{color:var(--second)}
@@ -349,6 +349,27 @@ const V = () => 'x';
 const ms = (c,v) => c===1&&v ? v : c===-1&&v ? '-'+v : c+v;
 const sumStr = arr => arr.map(([c,v],i)=>{ const s=ms(c,v); return i>0 && c>0 ? '+'+s : s }).join('');
 const pm = () => pick([1,-1]);
+// Zwischenschritt: Aus k·(a+b) werden die Paare (k,a) und (k,b) erwartet
+function makeMulti(t){
+  const term=parse(t.src).terms[0];
+  t.k = term.factors.find(f=>f.type==='num').v;
+  t.pairs = term.factors.find(f=>f.type==='group').e.terms.map(it=>({n:it.factors[0].v, s:it.sign}));
+  t.multi = true;
+}
+function checkDist(t, input){
+  let ast; try{ ast=parse(input) }catch(e){ return {state:'parse'} }
+  const same = P.eq(polyOf(ast), t.target);
+  const shape = ast.terms.length===t.pairs.length && ast.terms.every(tm=>tm.factors.length===2 && tm.factors.every(f=>f.type==='num'));
+  if(!shape) return same ? {state:'almost', msg:`Schreib zuerst den Zwischenschritt mit Malpunkten auf: ${t.k} · … + ${t.k} · …`} : {state:'wrong'};
+  const left=[...t.pairs];
+  for(const tm of ast.terms){
+    const [a,b]=[tm.factors[0].v, tm.factors[1].v];
+    const i=left.findIndex(p=>p.s===tm.sign && ((a===t.k && b===p.n) || (b===t.k && a===p.n)));
+    if(i<0) return same ? {state:'almost', msg:`Nimm die ${t.k} mit jeder Zahl in der Klammer mal.`} : {state:'wrong'};
+    left.splice(i,1);
+  }
+  return {state:'ok'};
+}
 function makeTask(kind, src, prompt){
   const target = polyOf(parse(src));
   return {kind, src, target, show:pretty(src), prompt: prompt || (kind==='exp' ? 'Löse die Klammer auf:' : 'Klammere aus:')};
@@ -407,7 +428,7 @@ const CHAPTERS = [
    <p>Beide Wege ergeben 32.</p>
    <div class="rule"><span class="label">Die Regel</span><span class="m">4 · (3 + 5) = 4 · 3 + 4 · 5</span><span>Die Zahl vor der Klammer wird mit <b>jeder</b> Zahl in der Klammer malgenommen.</span></div>`,
   examples:[[{line:'7 · (10 + 3)'},{line:'= 7 · 10 + 7 · 3', why:'Die 7 mit jeder Zahl in der Klammer malnehmen'},{line:'= 70 + 21'},{line:'= 91'}]],
-  tasks:[['exp','5*(10+2)','Rechne mit der Regel:'],['exp','3*(10+4)','Rechne mit der Regel:'],['exp','6*(10+1)','Rechne mit der Regel:']]},
+  tasks:[['exp','5*(10+2)','Rechne mit der Regel. Schreib zuerst den Zwischenschritt auf:',true],['exp','3*(10+4)','Rechne mit der Regel. Schreib zuerst den Zwischenschritt auf:',true],['exp','6*(10+1)','Rechne mit der Regel. Schreib zuerst den Zwischenschritt auf:',true]]},
  {title:'Klammer mit x', short:'3(x + 4) = 3x + 12', html:`
    <p>Jetzt steht ein <b>x</b> in der Klammer. Wir wissen nicht, wie groß x ist. Wir können die Klammer also nicht ausrechnen.</p>
    ${areaX}
@@ -544,14 +565,14 @@ function chapter(n){
     const why=line.nextElementSibling; if(why && why.classList.contains('why')) why.classList.remove('hide');
     if(hidden.length===1) b.remove();
   });
-  $('#try').onclick=()=>startGame({type:'tut', chapter:n, list:c.tasks.map(([k,s,pr])=>makeTask(k,s,pr))});
+  $('#try').onclick=()=>startGame({type:'tut', chapter:n, list:c.tasks.map(([k,s,pr,multi])=>{ const t=makeTask(k,s,pr); if(multi) makeMulti(t); return t })});
   window.scrollTo(0,0);
 }
 
 /* ================= Spiel ================= */
 let G=null, tick=null, cd=null;
-const KEYS = ['7','8','9','x','del','4','5','6','(',')','1','2','3','+','-','0','ok'];
-function keyLabel(k){ return k==='del'?'⌫' : k==='ok'?'OK' : k==='-'?'−' : k }
+const KEYS = ['7','8','9','x','del','4','5','6','(',')','1','2','3','+','-','0','*','ok'];
+function keyLabel(k){ return k==='del'?'⌫' : k==='ok'?'OK' : k==='-'?'−' : k==='*'?'·' : k }
 function startGame(cfg){
   G = Object.assign({score:0, correct:0, wrong:0, streak:0, bestStreak:0, count:0, input:'', locked:false, misses:[], total:60, left:60, last:''}, cfg);
   G.max = cfg.type==='tut' ? cfg.list.length : cfg.type==='train' ? 12 : Infinity;
@@ -561,13 +582,14 @@ function startGame(cfg){
     <div class="card" id="card">
       <div class="prompt" id="prompt"></div>
       <div class="task" id="q"></div>
+      <div id="doneLines"></div>
       <div class="ansrow"><span class="eq">=</span><span class="answer" id="ans"></span></div>
       <div class="fb" id="fb" role="status"></div>
       ${G.type!=='sprint'?'<button class="hintbtn" id="hint">💡 Tipp: erster Schritt</button>':''}
       <div id="help"></div>
     </div>
-    <div class="pad" id="pad">${KEYS.map(k=>`<button data-k="${k}" class="${/^[xab]$/.test(k)?'var':'+-()²'.includes(k)?'op':k==='ok'?'ok':k==='del'?'del':''}" aria-label="${k==='del'?'Löschen':k==='-'?'Minus':k==='²'?'hoch 2':k}">${keyLabel(k)}</button>`).join('')}</div>
-    <p class="note">Malpunkte brauchst du nicht: 3x heißt 3 · x.</p>`;
+    <div class="pad" id="pad">${KEYS.map(k=>`<button data-k="${k}" class="${/^[xab]$/.test(k)?'var':'+-()²*'.includes(k)?'op':k==='ok'?'ok':k==='del'?'del':''}" aria-label="${k==='del'?'Löschen':k==='-'?'Minus':k==='²'?'hoch 2':k==='*'?'mal':k}">${keyLabel(k)}</button>`).join('')}</div>
+    <p class="note">Den Malpunkt · brauchst du zwischen zwei Zahlen, zum Beispiel 5 · 10. Bei x nicht: 3x heißt 3 · x.</p>`;
   app.querySelectorAll('#pad button').forEach(b=>b.onclick=()=>key(b.dataset.k));
   const hb=$('#hint'); if(hb) hb.onclick=showHint;
   $('#quit').onclick=()=>{ stopGame(); G.type==='tut' ? chapter(G.chapter) : home() };
@@ -595,6 +617,7 @@ function next(){
   G.cur=t; G.last=t.src; G.input=''; G.locked=false; G.count++;
   $('#prompt').textContent=t.prompt; $('#q').textContent=t.show;
   $('#ans').textContent=''; $('#fb').textContent=''; $('#help').innerHTML=''; $('#card').className='card';
+  $('#doneLines').innerHTML=''; G.sub=0;
   const hb=$('#hint'); if(hb) hb.hidden=false;
   if(G.type!=='sprint') $('#prog').textContent = G.type==='tut' ? `Kapitel ${G.chapter+1} · Aufgabe ${G.count} von ${G.max}` : `${G.stage} · Aufgabe ${G.count} von ${G.max}`;
 }
@@ -609,6 +632,13 @@ function key(k){
 function showHint(){
   if(!G || !G.cur || G.cur.retry) return;
   const t=G.cur; t.hinted=true;
+  if(t.multi){
+    const nums=t.pairs.map(p=>p.n);
+    const txt = G.sub===0 ? `Nimm die ${t.k} mit der ${nums[0]} mal und die ${t.k} mit der ${nums[1]} mal. Schreib beides mit Malpunkt auf.`
+                          : `Rechne jedes Malzeichen einzeln aus. Dann ${t.pairs[1].s<0?'subtrahiere':'addiere'} die Ergebnisse.`;
+    $('#help').innerHTML = `<div class="sol"><span class="label">Tipp</span><span class="why" style="font-size:1rem;color:var(--fg)">${txt}</span></div>`;
+    $('#hint').hidden=true; return;
+  }
   const first = t.kind==='exp' ? '= '+stepsExp(t.src)[0].line : stepsFac(t.target)[0].line;
   const why = t.kind==='exp' ? 'Jetzt jeden Teil ausrechnen.' : stepsFac(t.target)[0].why;
   $('#help').innerHTML = `<div class="sol"><span class="label">Tipp</span><span class="line">${first}</span>${why?`<span class="why">${why}</span>`:''}</div>`;
@@ -619,7 +649,26 @@ function solutionHTML(t){
   return `<div class="sol"><span class="label">So geht's</span><span class="line">${t.show}</span>${steps.map(s=>`<span class="line">${t.kind==='exp'?'= ':''}${s.line}</span>${s.why?`<span class="why">${s.why}</span>`:''}`).join('')}</div>`;
 }
 function submit(){
-  const t=G.cur, r=check(t, G.input);
+  const t=G.cur;
+  if(t.multi && G.sub===0){
+    const d=checkDist(t, G.input);
+    if(d.state==='parse'){ $('#card').className='card almost'; $('#fb').textContent='Das kann ich nicht lesen. Prüfe die Rechenzeichen.'; return }
+    if(d.state==='almost'){ $('#card').className='card almost'; $('#fb').textContent=d.msg; return }
+    if(d.state==='ok'){
+      $('#doneLines').innerHTML = `<div class="ansrow"><span class="eq">=</span><span>${pretty(G.input.replace(/·/g,'*'))}</span></div>`;
+      G.sub=1; G.input=''; $('#ans').textContent=''; $('#help').innerHTML='';
+      $('#card').className='card'; $('#fb').textContent='Gut! Jetzt rechne aus:';
+      const hb=$('#hint'); if(hb && !t.retry) hb.hidden=false;
+      return;
+    }
+    if(!t.retry){ G.wrong++; G.streak=0; G.misses.push(`${t.show} = ${stepsExp(t.src)[0].line} = ${pretty(polyStr(t.target))}`) }
+    t.retry=true; G.input=''; $('#ans').textContent='';
+    $('#card').className='card no'; $('#fb').textContent='Noch nicht. Schau dir den Rechenweg an und schreib dann den Zwischenschritt auf.';
+    $('#help').innerHTML=solutionHTML(t); const hb=$('#hint'); if(hb) hb.hidden=true;
+    $('#score').textContent=G.score; $('#streak').textContent='';
+    return;
+  }
+  const r=check(t, G.input);
   if(r.state==='parse'){ $('#card').className='card almost'; $('#fb').textContent='Das kann ich nicht lesen. Prüfe Klammern und Rechenzeichen.'; return }
   if(r.state==='almost'){ $('#card').className='card almost'; $('#fb').textContent=r.msg; return }
   G.locked=true;
@@ -655,7 +704,7 @@ function toast(t){ const d=document.createElement('div'); d.className='toast'; d
 document.addEventListener('keydown',e=>{
   if(!G || !$('#ans') || e.target.tagName==='INPUT') return;
   const k=e.key;
-  if(/^[0-9]$/.test(k) || /^x$/i.test(k) || '+-()'.includes(k)) { key(k.toLowerCase()); e.preventDefault() }
+  if(/^[0-9]$/.test(k) || /^x$/i.test(k) || '+-()*'.includes(k)) { key(k.toLowerCase()); e.preventDefault() }
   else if(k==='Backspace'){ key('del'); e.preventDefault() }
   else if(k==='Enter') key('ok');
 });
