@@ -130,7 +130,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 .pad button:active{transform:scale(.97)}
 .pad .var{color:var(--accent);font-style:italic}
 .pad .op{background:var(--bg)}
-.pad .ok{background:var(--good);color:#fff;border-color:var(--good);font-size:1.1rem}
+.pad .ok{background:var(--good);color:#fff;border-color:var(--good);font-size:1.1rem;grid-column:span 4}
+.hintbtn{align-self:center;border:2px solid var(--line);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer;font:500 .95rem var(--body)}
 .pad .del{font-size:1.1rem;color:var(--muted)}
 .count{color:var(--second)}
 .pop{position:fixed;left:50%;top:36%;transform:translate(-50%,-50%);font:800 1.5rem var(--display);color:var(--gold);pointer-events:none;animation:pop .8s forwards}
@@ -161,8 +162,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 const $ = s => document.querySelector(s);
 const app = $('#app');
 const store = {
-  get(){ try{ return JSON.parse(localStorage.getItem('klammerprofi')||'{}') }catch(e){ return {} } },
-  set(v){ try{ localStorage.setItem('klammerprofi', JSON.stringify(v)) }catch(e){} }
+  get(){ try{ return JSON.parse(localStorage.getItem('klammerprofi2')||'{}') }catch(e){ return {} } },
+  set(v){ try{ localStorage.setItem('klammerprofi2', JSON.stringify(v)) }catch(e){} }
 };
 let save = Object.assign({name:'', tab:'learn', done:{}, cnt:{}, best:{}, pts:0, solved:0, stage:{A:'A1',K:'K1'}, mode:{A:'train',K:'train'}}, store.get());
 const persist = () => store.set(save);
@@ -300,16 +301,16 @@ function factorStr(f){
 function stepsFac(p){
   const f=factorize(p), ks=sortKeys(p), out=[];
   const nums=ks.map(k=>Math.abs(p.get(k)));
-  if(Math.abs(f.g)>1) out.push({line:`ggT(${nums.join(', ')}) = ${Math.abs(f.g)}`, why:'Größte Zahl, durch die alle Zahlen teilbar sind'});
+  if(Math.abs(f.g)>1) out.push({line:`Gemeinsame Zahl: ${Math.abs(f.g)}`, why:`${nums.join(' und ')} kann man beide durch ${Math.abs(f.g)} teilen`});
   else out.push({line:`Die Zahlen ${nums.join(', ')} haben keinen gemeinsamen Teiler.`, why:''});
   if(f.ok) out.push({line:`Jeder Summand enthält ${varStr(f.ok)}`, why:`Gemeinsamer Faktor: ${pretty(polyStr(new Map([[f.ok,Math.abs(f.g)]])))}`});
   if(f.g<0) out.push({line:`Erster Summand negativ: ${pretty(polyStr(f.outer))} ausklammern`, why:'Dann drehen sich die Vorzeichen in der Klammer um'});
-  ks.forEach(k=>{
-    const m=new Map([[k,p.get(k)]]), o=parseKey(k); for(const v in parseKey(f.ok)) o[v]-=parseKey(f.ok)[v];
-    const ik=keyOf(o);
-    out.push({line:`${pretty(polyStr(m))} = ${fac(f.outer)} · ${fac(new Map([[ik,f.inner.get(ik)]]))}`, why:''});
-  });
-  out.push({line:`= ${factorStr(f)}`, why:'Gemeinsamen Faktor vor die Klammer, den Rest hinein'});
+  const div = pretty(polyStr(new Map([[f.ok,Math.abs(f.g)]])));
+  out.push({line: ks.map(k=>{
+    const o=parseKey(k); for(const v in parseKey(f.ok)) o[v]-=parseKey(f.ok)[v]; const ik=keyOf(o);
+    return `${pretty(polyStr(new Map([[k,Math.abs(p.get(k))]])))} : ${div} = ${pretty(polyStr(new Map([[ik,Math.abs(f.inner.get(ik))]])))}`;
+  }).join('  und  '), why:'Beide Teile durch diese Zahl teilen'});
+  out.push({line:`= ${factorStr(f)}`, why:`Die ${div} kommt vor die Klammer, der Rest hinein${ks.some(k=>p.get(k)<0)?'. Das Minus bleibt stehen':''}`});
   return out;
 }
 
@@ -330,7 +331,7 @@ function check(task, input){
   if(task.kind==='exp'){
     if(input.includes('(')) return eq ? {state:'almost', msg:'Fast! In deiner Antwort steht noch eine Klammer. Löse sie ganz auf.'} : {state:'wrong'};
     if(!eq) return {state:'wrong'};
-    if(!ast.terms.every(simpleTerm)) return {state:'almost', msg:'Richtig gerechnet! Vereinfache noch, zum Beispiel 3 · 4 = 12 oder x · x = x².'};
+    if(!ast.terms.every(simpleTerm)) return {state:'almost', msg:'Richtig gerechnet! Vereinfache noch, zum Beispiel 3 · 4 = 12.'};
     const keys=ast.terms.map(t=>{ const q=termPoly(t); return q.size ? [...q.keys()][0] : '#0' });
     if(new Set(keys).size<keys.length) return {state:'almost', msg:'Richtig gerechnet! Fasse jetzt noch gleiche Terme zusammen.'};
     return {state:'ok'};
@@ -344,7 +345,7 @@ function check(task, input){
 }
 
 /* ================= Aufgaben erzeugen ================= */
-const V = () => pick(['x','x','x','a','b']);
+const V = () => 'x';
 const ms = (c,v) => c===1&&v ? v : c===-1&&v ? '-'+v : c+v;
 const sumStr = arr => arr.map(([c,v],i)=>{ const s=ms(c,v); return i>0 && c>0 ? '+'+s : s }).join('');
 const pm = () => pick([1,-1]);
@@ -353,61 +354,37 @@ function makeTask(kind, src, prompt){
   return {kind, src, target, show:pretty(src), prompt: prompt || (kind==='exp' ? 'Löse die Klammer auf:' : 'Klammere aus:')};
 }
 function genA(stage){
-  const k=rnd(2,9), v=V(), m=pick([1,1,2,3,4,5]), b=rnd(1,9);
+  const k=rnd(2,5), b=rnd(1,9), m = Math.random()<.75 ? 1 : 2;
   if(stage==='A1'){
-    const inner = Math.random()<.75 ? [[m,v],[b,'']] : [[b,''],[m,v]];
+    const inner = Math.random()<.8 ? [[m,'x'],[b,'']] : [[b,''],[m,'x']];
     return makeTask('exp', `${k}(${sumStr(inner)})`);
   }
   if(stage==='A2'){
-    const w=rnd(0,4);
-    if(w===0) return makeTask('exp', `${k}(${sumStr([[m,v],[-b,'']])})`);
-    if(w===1) return makeTask('exp', `-${k}(${sumStr([[m,v],[b,'']])})`);
-    if(w===2) return makeTask('exp', `-${k}(${sumStr([[m,v],[-b,'']])})`);
-    if(w===3) return makeTask('exp', `-(${sumStr([[1,v],[pm()*b,'']])})`);
-    return makeTask('exp', `${k}(${sumStr([[b,''],[-m,v]])})`);
+    const w=rnd(0,3);
+    if(w<=1) return makeTask('exp', `${k}(${sumStr([[m,'x'],[-b,'']])})`);
+    if(w===2) return makeTask('exp', `-(x+${b})`);
+    return makeTask('exp', `-(x-${b})`);
   }
-  if(stage==='A3'){
-    const w=rnd(0,3), k2=rnd(2,5);
-    if(w===0) return makeTask('exp', `${v}(${sumStr([[1,v],[pm()*b,'']])})`);
-    if(w===1) return makeTask('exp', `${k2}${v}(${sumStr([[m,v],[pm()*b,'']])})`);
-    if(w===2) return makeTask('exp', `a(${sumStr([[1,'b'],[pm()*b,'']])})`);
-    return makeTask('exp', `-${v}(${sumStr([[1,v],[-b,'']])})`);
-  }
-  // A4: mehrere Klammern, danach zusammenfassen
-  for(let tries=0; tries<20; tries++){
-    const k1=rnd(2,6), k2=rnd(2,6), b1=rnd(1,9), b2=rnd(1,9), mm=rnd(2,7), w=rnd(0,3);
-    const src = w===0 ? `${k1}(x+${b1})+${k2}(x-${b2})`
-              : w===1 ? `${k1}(x+${b1})-${k2}(x+${b2})`
-              : w===2 ? `${k1}(x+${b1})+${mm}x`
-              :         `${mm}x-${k1}(x-${b1})`;
-    const t=makeTask('exp', src, 'Löse auf und fasse zusammen:');
-    if(t.target.size===2) return t;
-  }
-  return makeTask('exp','3(x+2)+2(x-1)','Löse auf und fasse zusammen:');
+  // A3: auflösen und zusammenfassen, nur mit Plus zwischen den Teilen
+  const w=rnd(0,2), c=rnd(1,9), mm=rnd(1,4), k2=rnd(2,4), b2=rnd(1,5);
+  const src = w===0 ? `${k}(x+${b})+${c}` : w===1 ? `${k}(x+${b})+${ms(mm,'x')}` : `${k}(x+${rnd(1,5)})+${k2}(x+${b2})`;
+  return makeTask('exp', src, 'Löse auf und fasse zusammen:');
 }
 function coprimePair(maxM=6){ let m,n; do{ m=rnd(1,maxM); n=rnd(1,9) } while(gcd(m,n)!==1); return [m,n] }
 function facFrom(outer, inner){ const p=polyOf(parse(`${outer}(${inner})`)); return makeTask('fac', polyStr(p)) }
 function genK(stage){
-  const g=rnd(2,9), v=V();
-  if(stage==='K1'){ const [m,n]=coprimePair(4); return facFrom(String(rnd(2,6)), sumStr([[m,v],[n,'']])) }
-  if(stage==='K2'){
-    const w=rnd(0,2);
-    if(w===0){ const [m,n]=coprimePair(); return facFrom(String(g), sumStr([[m,v],[-n,'']])) }
-    if(w===1){ const [m,n]=coprimePair(); return facFrom('-'+g, sumStr([[m,v],[n,'']])) }
-    let a,b,c; do{ a=rnd(1,5); b=rnd(1,5); c=rnd(1,9) } while(gcd(gcd(a,b),c)!==1);
-    return facFrom(String(rnd(2,6)), sumStr([[a,'a'],[b,'b'],[-c,'']]));
-  }
-  const w=rnd(0,3), g2=rnd(2,5), n=rnd(1,9);
-  if(w===0) return facFrom(v, sumStr([[1,v],[pm()*n,'']]));
-  if(w===1){ const [m,nn]=coprimePair(5); return facFrom(g2+v, sumStr([[m,v],[pm()*nn,'']])) }
-  if(w===2) return facFrom('a', sumStr([[1,'b'],[n,'']]));
-  return facFrom(g2+'a', sumStr([[1,'b'],[-n,'']]));
+  const g=rnd(2,5), n=rnd(1,9);
+  if(stage==='K1') return facFrom(String(g), `x+${n}`);
+  const w=rnd(0,2);
+  if(w===0) return facFrom(String(g), `x-${n}`);
+  let m, nn; do{ m=pick([2,3]); nn=rnd(1,9) } while(gcd(m,nn)!==1);
+  return facFrom(String(g), sumStr([[m,'x'],[pm()*nn,'']]));
 }
 
 /* ================= Inhalte ================= */
 const STAGES = {
-  A:[{id:'A1',name:'Einfach',ex:'3(x + 4)'},{id:'A2',name:'Mit Minus',ex:'−2(x − 5)'},{id:'A3',name:'Variable davor',ex:'x(x + 3)'},{id:'A4',name:'Zusammenfassen',ex:'2(x + 1) + 3(x − 2)'}],
-  K:[{id:'K1',name:'Zahl ausklammern',ex:'6x + 9'},{id:'K2',name:'Mit Minus',ex:'12x − 8'},{id:'K3',name:'Variable ausklammern',ex:'x² + 5x'}]
+  A:[{id:'A1',name:'Einfach',ex:'3(x + 4)'},{id:'A2',name:'Mit Minus',ex:'2(x − 5)'},{id:'A3',name:'Zusammenfassen',ex:'2(x + 3) + 4'}],
+  K:[{id:'K1',name:'Einfach',ex:'3x + 6'},{id:'K2',name:'Schwieriger',ex:'4x − 10'}]
 };
 const BEREICH = {A:{title:'Klammern auflösen', short:'Auflösen', gen:genA}, K:{title:'Ausklammern', short:'Ausklammern', gen:genK}};
 const allStages = () => [...STAGES.A, ...STAGES.K];
@@ -422,71 +399,61 @@ const areaX = `<svg class="area" viewBox="0 0 360 170" role="img" aria-label="Re
 
 const CHAPTERS = [
  {title:'Die Idee: Verteilen', short:'Malnehmen in Teilen', html:`
-   <p>Schau dir das Rechteck an: Es ist <b>4 Kästchen hoch</b> und <b>3 + 5 Kästchen breit</b>.</p>
+   <p>Schau dir das Rechteck an. Es ist <b>4 Kästchen hoch</b> und <b>3 + 5 Kästchen breit</b>.</p>
    ${gridHTML(4,3,5)}
-   <p>Wie viele Kästchen sind es? Du kannst auf zwei Arten rechnen:</p>
+   <p>Wie viele Kästchen sind es? Es gibt zwei Wege:</p>
    <div class="example"><span class="label">Weg 1: erst die Klammer</span><span class="line">4 · (3 + 5) = 4 · 8 = 32</span></div>
    <div class="example"><span class="label">Weg 2: beide Teile einzeln</span><span class="line">4 · 3 + 4 · 5 = 12 + 20 = 32</span></div>
-   <div class="rule"><span class="label">Distributivgesetz</span><span class="m">a · (b + c) = a · b + a · c</span><span>Der Faktor vor der Klammer wird auf <b>jeden Summanden</b> in der Klammer verteilt.</span></div>
-   <p>Damit kannst du sogar schwierige Aufgaben leicht im Kopf rechnen.</p>`,
-  examples:[[{line:'7 · (10 + 3)'},{line:'= 7 · 10 + 7 · 3', why:'Die 7 mit jeder Zahl in der Klammer malnehmen'},{line:'= 70 + 21'},{line:'= 91'}],
-            [{line:'6 · 99 = 6 · (100 − 1)', why:'Trick: 99 ist 100 − 1'},{line:'= 6 · 100 − 6 · 1'},{line:'= 600 − 6 = 594'}]],
-  tasks:[['exp','5*(10+2)','Rechne mit dem Distributivgesetz:'],['exp','8*(10+4)','Rechne mit dem Distributivgesetz:'],['exp','4*(100-2)','Rechne mit dem Distributivgesetz:']]},
- {title:'Klammern mit Variablen', short:'3(x + 4) = 3x + 12', html:`
-   <p>Jetzt ist eine Seite des Rechtecks <b>x</b> lang. Wir wissen nicht, wie groß x ist. Deshalb können wir die Klammer nicht zuerst ausrechnen.</p>
+   <p>Beide Wege ergeben 32.</p>
+   <div class="rule"><span class="label">Die Regel</span><span class="m">4 · (3 + 5) = 4 · 3 + 4 · 5</span><span>Die Zahl vor der Klammer wird mit <b>jeder</b> Zahl in der Klammer malgenommen.</span></div>`,
+  examples:[[{line:'7 · (10 + 3)'},{line:'= 7 · 10 + 7 · 3', why:'Die 7 mit jeder Zahl in der Klammer malnehmen'},{line:'= 70 + 21'},{line:'= 91'}]],
+  tasks:[['exp','5*(10+2)','Rechne mit der Regel:'],['exp','3*(10+4)','Rechne mit der Regel:'],['exp','6*(10+1)','Rechne mit der Regel:']]},
+ {title:'Klammer mit x', short:'3(x + 4) = 3x + 12', html:`
+   <p>Jetzt steht ein <b>x</b> in der Klammer. Wir wissen nicht, wie groß x ist. Wir können die Klammer also nicht ausrechnen.</p>
    ${areaX}
-   <p>Aber wir können die 3 verteilen, genau wie vorher:</p>
+   <p>Aber die Regel funktioniert trotzdem: Die 3 wird mit dem x und mit der 4 malgenommen.</p>
    <div class="rule"><span class="m">3(x + 4) = 3 · x + 3 · 4 = 3x + 12</span></div>
-   <div class="tip">Den Malpunkt vor einer Klammer darf man weglassen: <span class="m">3(x + 4)</span> heißt <span class="m">3 · (x + 4)</span>. Genauso ist <span class="m">3x</span> dasselbe wie <span class="m">3 · x</span>.</div>`,
-  examples:[[{line:'5(2x + 3)'},{line:'= 5 · 2x + 5 · 3', why:'Die 5 mit jedem Summanden malnehmen'},{line:'= 10x + 15', why:'5 · 2x = 10x, denn 5 · 2 = 10'}]],
-  tasks:[['exp','2(x+5)'],['exp','4(2x+3)'],['exp','6(a+1)']]},
- {title:'Vorsicht, Minus!', short:'Vorzeichenregeln', html:`
-   <p>Wenn ein Minus im Spiel ist, musst du auf die Vorzeichen achten. Es gelten die Regeln fürs Malnehmen:</p>
-   <div class="signs"><div>+ mal + = +</div><div>− mal − = +</div><div>+ mal − = −</div><div>− mal + = −</div></div>
-   <div class="tip">Am sichersten: Nimm das Vorzeichen immer mit. Bei <span class="m">−3(x + 2)</span> rechnest du mit <span class="m">(−3)</span>.</div>
-   <div class="rule"><span class="label">Nur ein Minus vor der Klammer</span><span class="m">−(x − 4) = −x + 4</span><span>Das Minus wirkt wie <span class="m">−1 ·</span>. Alle Vorzeichen in der Klammer drehen sich um.</span></div>`,
-  examples:[[{line:'2(x − 3)'},{line:'= 2 · x + 2 · (−3)', why:'Das Minus gehört zur 3'},{line:'= 2x − 6'}],
-            [{line:'−3(x + 2)'},{line:'= (−3) · x + (−3) · 2'},{line:'= −3x − 6', why:'− mal + = −'}],
-            [{line:'−2(x − 5)'},{line:'= (−2) · x + (−2) · (−5)'},{line:'= −2x + 10', why:'− mal − = +'}]],
-  tasks:[['exp','5(x-2)'],['exp','-4(x+3)'],['exp','-2(x-6)'],['exp','-(x-7)']]},
- {title:'Variablen vor der Klammer', short:'x(x + 3) = x² + 3x', html:`
-   <p>Auch eine Variable kann vor der Klammer stehen. Dann gilt genau dieselbe Regel.</p>
-   <div class="tip">Erinnerung: <span class="m">x · x = x²</span> &nbsp;und&nbsp; <span class="m">2x · 3x = 6x²</span> (Zahlen malnehmen, Variablen malnehmen). Verschiedene Variablen schreibt man nebeneinander: <span class="m">a · b = ab</span>.</div>`,
-  examples:[[{line:'x(x + 3)'},{line:'= x · x + x · 3'},{line:'= x² + 3x', why:'x · 3 schreibt man als 3x'}],
-            [{line:'2a(3a − 4)'},{line:'= 2a · 3a + 2a · (−4)'},{line:'= 6a² − 8a'}],
-            [{line:'a(b + 5)'},{line:'= a · b + a · 5'},{line:'= ab + 5a'}]],
-  tasks:[['exp','x(x+5)'],['exp','3x(2x-1)'],['exp','a(b-4)']]},
- {title:'Auflösen und zusammenfassen', short:'Mehrere Klammern', html:`
-   <p>Oft stehen mehrere Klammern in einem Term. So gehst du vor:</p>
-   <div class="rule"><span><b>1.</b> Jede Klammer einzeln auflösen.</span><span><b>2.</b> Gleiche Terme zusammenfassen: x-Terme zu x-Termen, Zahlen zu Zahlen.</span></div>
-   <div class="tip">Steht ein Minus vor der zweiten Klammer, gehört es zum Faktor: Bei <span class="m">− 2(x + 5)</span> rechnest du mit <span class="m">(−2)</span>.</div>`,
-  examples:[[{line:'3(x + 2) + 2(x − 1)'},{line:'= 3x + 6 + 2x − 2', why:'Beide Klammern auflösen'},{line:'= 5x + 4', why:'3x + 2x = 5x und 6 − 2 = 4'}],
-            [{line:'4(x + 3) − 2(x + 5)'},{line:'= 4x + 12 − 2x − 10', why:'(−2) · 5 = −10'},{line:'= 2x + 2'}]],
-  tasks:[['exp','2(x+4)+3(x+1)','Löse auf und fasse zusammen:'],['exp','5(x+2)-3(x+1)','Löse auf und fasse zusammen:'],['exp','4(x-1)+2x','Löse auf und fasse zusammen:']]},
- {title:'Ausklammern: der Weg zurück', short:'6x + 9 = 3(2x + 3)', html:`
-   <p>Ausklammern ist das Gegenteil von Ausmultiplizieren. Du suchst den Faktor, der in <b>jedem</b> Summanden steckt, und schreibst ihn vor die Klammer.</p>
-   <div class="rule"><span class="label">So geht's</span><span><b>1.</b> Finde die größte Zahl, durch die alle Zahlen teilbar sind (ggT).</span><span><b>2.</b> Teile jeden Summanden durch diese Zahl.</span><span><b>3.</b> Schreibe die Zahl vor die Klammer und die Ergebnisse hinein.</span><span><b>4.</b> Probe: Wieder auflösen, dann muss der Anfangsterm herauskommen.</span></div>
-   <div class="tip">Nimm immer den <b>größten</b> gemeinsamen Faktor. <span class="m">8x + 12 = 2(4x + 6)</span> stimmt zwar, aber in der Klammer steckt noch eine 2. Fertig ist erst <span class="m">4(2x + 3)</span>.</div>`,
-  examples:[[{line:'6x + 9'},{line:'ggT(6, 9) = 3', why:'6 und 9 sind beide durch 3 teilbar'},{line:'6x : 3 = 2x  und  9 : 3 = 3', why:'Jeden Summanden durch 3 teilen'},{line:'= 3(2x + 3)'},{line:'Probe: 3 · 2x + 3 · 3 = 6x + 9 ✓'}],
-            [{line:'12x − 8'},{line:'ggT(12, 8) = 4'},{line:'12x : 4 = 3x  und  −8 : 4 = −2'},{line:'= 4(3x − 2)'}]],
-  tasks:[['fac','4x+10'],['fac','12x-8'],['fac','5x+15']]},
- {title:'Variablen und Minus ausklammern', short:'x² + 5x = x(x + 5)', html:`
-   <p>Steckt in jedem Summanden dieselbe Variable, kannst du auch sie ausklammern.</p>
-   <div class="rule"><span class="m">x² + 5x = x · x + 5 · x = x(x + 5)</span></div>
-   <p>Oft klammert man eine Zahl und eine Variable zusammen aus:</p>
-   <div class="rule"><span class="m">6x² − 9x = 3x(2x − 3)</span><span>Zahl: ggT(6, 9) = 3. Variable: Beide Summanden enthalten x. Zusammen: 3x.</span></div>
-   <div class="tip">Ist der erste Summand negativ, klammert man meistens das Minus mit aus. Dann drehen sich die Vorzeichen in der Klammer um: <span class="m">−4x − 8 = −4(x + 2)</span>.</div>`,
-  examples:[[{line:'10a² + 15a'},{line:'ggT(10, 15) = 5', why:'Zahl'},{line:'Beide Summanden enthalten a', why:'Variable'},{line:'10a² : 5a = 2a  und  15a : 5a = 3'},{line:'= 5a(2a + 3)'}],
-            [{line:'−3x − 12'},{line:'Erster Summand negativ: −3 ausklammern'},{line:'−3x : (−3) = x  und  −12 : (−3) = 4'},{line:'= −3(x + 4)'}]],
-  tasks:[['fac','x²-7x'],['fac','10a²+15a'],['fac','-3x-12'],['fac','ab+4a']]}
+   <div class="tip">Zwischen Zahl und Klammer steht oft kein Malpunkt: <span class="m">3(x + 4)</span> heißt <span class="m">3 · (x + 4)</span>. Und <span class="m">3x</span> heißt <span class="m">3 · x</span>.</div>`,
+  examples:[[{line:'2(x + 5)'},{line:'= 2 · x + 2 · 5', why:'Die 2 mit x malnehmen und mit 5 malnehmen'},{line:'= 2x + 10'}],
+            [{line:'4(x + 1)'},{line:'= 4 · x + 4 · 1'},{line:'= 4x + 4'}]],
+  tasks:[['exp','2(x+3)'],['exp','5(x+2)'],['exp','4(x+6)']]},
+ {title:'Minus in der Klammer', short:'2(x − 3) = 2x − 6', html:`
+   <p>Steht in der Klammer ein Minus, bleibt das Minus einfach stehen.</p>
+   <div class="rule"><span class="m">2(x − 3) = 2 · x − 2 · 3 = 2x − 6</span></div>
+   <div class="tip">Rechne zuerst <span class="m">2 · x</span>, dann <span class="m">2 · 3</span>. Das Minus schreibst du dazwischen.</div>`,
+  examples:[[{line:'5(x − 2)'},{line:'= 5 · x − 5 · 2', why:'Das Minus bleibt stehen'},{line:'= 5x − 10'}]],
+  tasks:[['exp','3(x-2)'],['exp','4(x-5)'],['exp','2(x-7)']]},
+ {title:'Minus vor der Klammer', short:'−(x + 4) = −x − 4', html:`
+   <p>Steht nur ein Minus vor der Klammer, drehen sich <b>alle Zeichen</b> in der Klammer um:</p>
+   <div class="signs"><div>+ wird zu −</div><div>− wird zu +</div></div>
+   <div class="rule"><span class="m">−(x + 4) = −x − 4</span><span class="m">−(x − 4) = −x + 4</span></div>
+   <div class="tip">Auch das x bekommt ein Minus: aus <span class="m">x</span> wird <span class="m">−x</span>.</div>`,
+  examples:[[{line:'−(x + 6)'},{line:'= −x − 6', why:'x wird zu −x, + 6 wird zu − 6'}],
+            [{line:'−(x − 2)'},{line:'= −x + 2', why:'x wird zu −x, − 2 wird zu + 2'}]],
+  tasks:[['exp','-(x+5)'],['exp','-(x-3)'],['exp','-(x+8)']]},
+ {title:'Auflösen und zusammenfassen', short:'2(x + 3) + 4 = 2x + 10', html:`
+   <p>Manchmal steht nach der Klammer noch etwas. Dann gehst du so vor:</p>
+   <div class="rule"><span><b>1.</b> Klammer auflösen.</span><span><b>2.</b> Zusammenfassen: x zu x, Zahlen zu Zahlen.</span></div>
+   <div class="tip">x und Zahlen darf man <b>nicht</b> zusammenrechnen. <span class="m">2x + 10</span> bleibt so stehen.</div>`,
+  examples:[[{line:'2(x + 3) + 4'},{line:'= 2x + 6 + 4', why:'Klammer auflösen'},{line:'= 2x + 10', why:'6 + 4 = 10'}],
+            [{line:'3(x + 1) + 2x'},{line:'= 3x + 3 + 2x', why:'Klammer auflösen'},{line:'= 5x + 3', why:'3x + 2x = 5x'}]],
+  tasks:[['exp','2(x+4)+3','Löse auf und fasse zusammen:'],['exp','3(x+2)+x','Löse auf und fasse zusammen:'],['exp','2(x+1)+3(x+2)','Löse auf und fasse zusammen:']]},
+ {title:'Ausklammern: der Weg zurück', short:'3x + 6 = 3(x + 2)', html:`
+   <p>Jetzt geht es rückwärts. Du hast <span class="m">3x + 6</span> und sollst eine Klammer setzen.</p>
+   <div class="rule"><span class="label">So geht's</span><span><b>1.</b> Suche eine Zahl, durch die du <b>beide</b> Zahlen teilen kannst. Bei 3 und 6 ist das die 3.</span><span><b>2.</b> Teile beide Teile durch diese Zahl: 3x : 3 = x und 6 : 3 = 2.</span><span><b>3.</b> Die Zahl kommt vor die Klammer, der Rest hinein: <span class="m">3(x + 2)</span>.</span></div>
+   <div class="tip"><b>Probe:</b> Löse die Klammer wieder auf. <span class="m">3(x + 2) = 3x + 6</span> ✓ Dann stimmt es.</div>
+   <div class="tip">Nimm die <b>größte</b> passende Zahl. Bei <span class="m">4x + 8</span> ist das die 4: <span class="m">4(x + 2)</span>.</div>`,
+  examples:[[{line:'5x + 10'},{line:'Gemeinsame Zahl: 5', why:'5 und 10 kann man beide durch 5 teilen'},{line:'5x : 5 = x  und  10 : 5 = 2'},{line:'= 5(x + 2)'},{line:'Probe: 5 · x + 5 · 2 = 5x + 10 ✓'}],
+            [{line:'6x − 9'},{line:'Gemeinsame Zahl: 3', why:'6 und 9 kann man beide durch 3 teilen'},{line:'6x : 3 = 2x  und  9 : 3 = 3'},{line:'= 3(2x − 3)', why:'Das Minus bleibt stehen'}]],
+  tasks:[['fac','2x+8'],['fac','5x+15'],['fac','4x-12']]}
 ];
 
 /* Lernpfad: Kapitel 1–5, Üben Auflösen, Kapitel 6–7, Üben Ausklammern, Minutentest */
 const PATH = [
   {ch:0},{ch:1},{ch:2},{ch:3},{ch:4},
-  {practice:'A', title:'Üben: Klammern auflösen', sub:'Stufen A1 bis A4'},
-  {ch:5},{ch:6},
-  {practice:'K', title:'Üben: Ausklammern', sub:'Stufen K1 bis K3'},
+  {practice:'A', title:'Üben: Klammern auflösen', sub:'Stufen A1 bis A3'},
+  {ch:5},
+  {practice:'K', title:'Üben: Ausklammern', sub:'Stufen K1 und K2'},
   {test:true, title:'Minutentest', sub:'So viele Aufgaben wie möglich in 60 Sekunden'}
 ];
 const cntOf = id => save.cnt[id]||0;
@@ -515,7 +482,7 @@ function home(){
     body = `<section class="panel">
       <span class="label">Stufe wählen</span>
       <div class="stages">${STAGES[b].map(s=>{ const c=Math.min(cntOf(s.id),SICHER); return `<button class="chip ${c>=SICHER?'ok':''}" aria-pressed="${st===s.id}" data-st="${s.id}"><b>${s.id} · ${s.name}</b><span class="ex">${s.ex}</span><small>${c>=SICHER?'✓ geschafft':`${c} von ${SICHER} richtig`}</small><span class="bar"><i style="width:${c/SICHER*100}%"></i></span></button>` }).join('')}</div>
-      <p class="note">Eine Stufe ist geschafft, wenn du ${SICHER} Aufgaben daraus auf Anhieb richtig gelöst hast.</p>
+      <p class="note">Eine Stufe ist geschafft, wenn du ${SICHER} Aufgaben ohne Tipp richtig gelöst hast.</p>
       <span class="label">Modus</span>
       <div class="modes">
         <button class="mode" data-m="train" aria-pressed="${mode==='train'}"><b>✎ Üben</b><small>12 Aufgaben ohne Zeitdruck. Bei Fehlern siehst du den Rechenweg.</small></button>
@@ -528,8 +495,8 @@ function home(){
     <header><h1>Klammer-<span>Profi</span></h1><p class="sub">Terme mit dem Distributivgesetz</p></header>
     <nav class="tabs" aria-label="Bereich">
       <button class="tab" data-tab="learn" aria-pressed="${tab==='learn'}"><b>Lernen</b>${Object.keys(save.done).length} von ${CHAPTERS.length} Kapiteln</button>
-      <button class="tab" data-tab="A" aria-pressed="${tab==='A'}"><b>Auflösen</b>${sicherIn('A')} von 4 Stufen</button>
-      <button class="tab" data-tab="K" aria-pressed="${tab==='K'}"><b>Ausklammern</b>${sicherIn('K')} von 3 Stufen</button>
+      <button class="tab" data-tab="A" aria-pressed="${tab==='A'}"><b>Auflösen</b>${sicherIn('A')} von ${STAGES.A.length} Stufen</button>
+      <button class="tab" data-tab="K" aria-pressed="${tab==='K'}"><b>Ausklammern</b>${sicherIn('K')} von ${STAGES.K.length} Stufen</button>
     </nav>
     ${body}
     <section class="panel">
@@ -543,7 +510,7 @@ function home(){
     const p=PATH[+b.dataset.path];
     if(p.ch!==undefined) return chapter(p.ch);
     if(p.practice){ save.tab=p.practice; save.mode[p.practice]='train'; persist(); return home() }
-    const b2 = sicherIn('K')>0 || save.done[5] ? 'K' : 'A'; save.tab=b2; save.mode[b2]='sprint'; persist(); home();
+    const b2 = sicherIn('K')>0 ? 'K' : 'A'; save.tab=b2; save.mode[b2]='sprint'; persist(); home();
   });
   app.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ save.stage[tab]=b.dataset.st; persist(); home() });
   app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ save.mode[tab]=b.dataset.m; persist(); home() });
@@ -583,7 +550,7 @@ function chapter(n){
 
 /* ================= Spiel ================= */
 let G=null, tick=null, cd=null;
-const KEYS = ['7','8','9','x','del','4','5','6','a','(','1','2','3','b',')','0','+','-','²','ok'];
+const KEYS = ['7','8','9','x','del','4','5','6','(',')','1','2','3','+','-','0','ok'];
 function keyLabel(k){ return k==='del'?'⌫' : k==='ok'?'OK' : k==='-'?'−' : k }
 function startGame(cfg){
   G = Object.assign({score:0, correct:0, wrong:0, streak:0, bestStreak:0, count:0, input:'', locked:false, misses:[], total:60, left:60, last:''}, cfg);
@@ -596,11 +563,13 @@ function startGame(cfg){
       <div class="task" id="q"></div>
       <div class="ansrow"><span class="eq">=</span><span class="answer" id="ans"></span></div>
       <div class="fb" id="fb" role="status"></div>
+      ${G.type!=='sprint'?'<button class="hintbtn" id="hint">💡 Tipp: erster Schritt</button>':''}
       <div id="help"></div>
     </div>
     <div class="pad" id="pad">${KEYS.map(k=>`<button data-k="${k}" class="${/^[xab]$/.test(k)?'var':'+-()²'.includes(k)?'op':k==='ok'?'ok':k==='del'?'del':''}" aria-label="${k==='del'?'Löschen':k==='-'?'Minus':k==='²'?'hoch 2':k}">${keyLabel(k)}</button>`).join('')}</div>
-    <p class="note">Tipp: Für x² tippst du <b>x</b> und dann <b>²</b>. Malpunkte brauchst du nicht: 3x heißt 3 · x.</p>`;
+    <p class="note">Malpunkte brauchst du nicht: 3x heißt 3 · x.</p>`;
   app.querySelectorAll('#pad button').forEach(b=>b.onclick=()=>key(b.dataset.k));
+  const hb=$('#hint'); if(hb) hb.onclick=showHint;
   $('#quit').onclick=()=>{ stopGame(); G.type==='tut' ? chapter(G.chapter) : home() };
   window.scrollTo(0,0);
   if(G.type!=='sprint'){ next(); return }
@@ -626,6 +595,7 @@ function next(){
   G.cur=t; G.last=t.src; G.input=''; G.locked=false; G.count++;
   $('#prompt').textContent=t.prompt; $('#q').textContent=t.show;
   $('#ans').textContent=''; $('#fb').textContent=''; $('#help').innerHTML=''; $('#card').className='card';
+  const hb=$('#hint'); if(hb) hb.hidden=false;
   if(G.type!=='sprint') $('#prog').textContent = G.type==='tut' ? `Kapitel ${G.chapter+1} · Aufgabe ${G.count} von ${G.max}` : `${G.stage} · Aufgabe ${G.count} von ${G.max}`;
 }
 function key(k){
@@ -635,6 +605,14 @@ function key(k){
   else if(G.input.length<40) G.input+=k;
   $('#ans').textContent=live(G.input);
   if($('#card').classList.contains('almost')){ $('#card').className='card'; $('#fb').textContent='' }
+}
+function showHint(){
+  if(!G || !G.cur || G.cur.retry) return;
+  const t=G.cur; t.hinted=true;
+  const first = t.kind==='exp' ? '= '+stepsExp(t.src)[0].line : stepsFac(t.target)[0].line;
+  const why = t.kind==='exp' ? 'Jetzt jeden Teil ausrechnen.' : stepsFac(t.target)[0].why;
+  $('#help').innerHTML = `<div class="sol"><span class="label">Tipp</span><span class="line">${first}</span>${why?`<span class="why">${why}</span>`:''}</div>`;
+  $('#hint').hidden=true;
 }
 function solutionHTML(t){
   const steps = t.kind==='exp' ? stepsExp(t.src) : stepsFac(t.target);
@@ -648,13 +626,13 @@ function submit(){
   if(r.state==='ok'){
     if(t.retry){ $('#card').className='card ok'; $('#fb').textContent='Genau, jetzt stimmt es!'; return later(1200) }
     G.correct++; G.streak++; G.bestStreak=Math.max(G.bestStreak,G.streak); save.solved=(save.solved||0)+1;
-    const pts = 10 + (G.streak>=3?5:0); G.score+=pts; popup('+'+pts);
-    if(G.type!=='tut'){
+    const pts = t.hinted ? 5 : 10 + (G.streak>=3?5:0); G.score+=pts; popup('+'+pts);
+    if(G.type!=='tut' && !t.hinted){
       const before=cntOf(G.stage); save.cnt[G.stage]=before+1;
       if(before+1===SICHER) toast(`Stufe ${G.stage} geschafft ✓`);
     }
     persist();
-    $('#card').className='card ok'; $('#fb').textContent=pick(['Richtig!','Super!','Stark gerechnet!','Genau so!']);
+    $('#card').className='card ok'; $('#fb').textContent = t.hinted ? 'Richtig! Probier die nächste ohne Tipp.' : pick(['Richtig!','Super!','Stark gerechnet!','Genau so!']);
     later(G.type==='sprint'?500:900);
   } else {
     G.wrong++; G.streak=0; G.misses.push(`${t.show} = ${t.kind==='exp'?pretty(polyStr(t.target)):factorStr(factorize(t.target))}`);
@@ -662,7 +640,7 @@ function submit(){
     $('#help').innerHTML=solutionHTML(t);
     if(G.type==='sprint'){ $('#fb').textContent='Leider falsch.'; return later(3000) }
     $('#fb').textContent='Noch nicht. Schau dir den Rechenweg an und tippe dann die Lösung ein.';
-    t.retry=true; G.input=''; $('#ans').textContent=''; G.locked=false;
+    t.retry=true; G.input=''; $('#ans').textContent=''; G.locked=false; const hb=$('#hint'); if(hb) hb.hidden=true;
   }
   $('#score').textContent=G.score;
   $('#streak').textContent = G.streak>=3 ? `🔥 ${G.streak} in Folge` : '';
@@ -677,8 +655,7 @@ function toast(t){ const d=document.createElement('div'); d.className='toast'; d
 document.addEventListener('keydown',e=>{
   if(!G || !$('#ans') || e.target.tagName==='INPUT') return;
   const k=e.key;
-  if(/^[0-9]$/.test(k) || /^[xab]$/i.test(k) || '+-()'.includes(k)) { key(k.toLowerCase()); e.preventDefault() }
-  else if(k==='^' || k==='²') key('²');
+  if(/^[0-9]$/.test(k) || /^x$/i.test(k) || '+-()'.includes(k)) { key(k.toLowerCase()); e.preventDefault() }
   else if(k==='Backspace'){ key('del'); e.preventDefault() }
   else if(k==='Enter') key('ok');
 });
@@ -695,7 +672,7 @@ function end(){
   save.pts=(save.pts||0)+g.score; persist();
   const title = g.type==='tut' ? `Kapitel ${g.chapter+1}: ${CHAPTERS[g.chapter].title}` : `${g.stage} ${stageOf(g.stage).name} · ${g.type==='sprint'?'Minutentest':'Üben'}`;
   const nextBtn = g.type==='tut'
-    ? (g.chapter+1<CHAPTERS.length ? `<button class="btn" id="nextch">Weiter zu Kapitel ${g.chapter+2}</button>` : `<button class="btn" id="toK">Jetzt Ausklammern üben</button>`)
+    ? (g.chapter===4 ? `<button class="btn" id="toA">Jetzt Auflösen üben</button>` : g.chapter+1<CHAPTERS.length ? `<button class="btn" id="nextch">Weiter zu Kapitel ${g.chapter+2}</button>` : `<button class="btn" id="toK">Jetzt Ausklammern üben</button>`)
     : `<button class="btn" id="again">Nochmal</button>`;
   app.innerHTML = `
     <section class="cert">
@@ -706,7 +683,7 @@ function end(){
       <div class="stars" aria-label="${stars} von 3 Sternen">${'★'.repeat(stars)}${'☆'.repeat(3-stars)}</div>
       <div class="note">${new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}, ${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr</div>
       ${rec?'<div><b style="color:var(--gold)">Neuer Rekord!</b></div>':''}
-      ${chapterDone && g.chapter===4 ? '<div class="note">Tipp: Übe jetzt im Bereich „Auflösen“, bevor du mit Kapitel 6 weitermachst.</div>':''}
+      ${chapterDone && g.chapter===4 ? '<div class="note">Übe jetzt im Bereich „Auflösen“, bevor du mit Kapitel 6 weitermachst.</div>':''}
     </section>
     ${g.misses.length?`<section class="panel"><span class="label">Diese Aufgaben solltest du dir nochmal ansehen</span><div class="list">${[...new Set(g.misses)].map(m=>`<div><span class="m">${m}</span></div>`).join('')}</div></section>`:''}
     ${nextBtn}
@@ -714,6 +691,7 @@ function end(){
   $('#back').onclick=home;
   const a=$('#again'); if(a) a.onclick=()=>startGame({type:g.type, bereich:g.bereich, stage:g.stage});
   const nc=$('#nextch'); if(nc) nc.onclick=()=>chapter(g.chapter+1);
+  const ta=$('#toA'); if(ta) ta.onclick=()=>{ save.tab='A'; save.mode.A='train'; persist(); home() };
   const tk=$('#toK'); if(tk) tk.onclick=()=>{ save.tab='K'; save.mode.K='train'; persist(); home() };
   window.scrollTo(0,0);
 }
@@ -726,7 +704,7 @@ function proof(){
       <span class="label">Nachweis · Klammer-Profi</span>
       <div class="who">${esc(save.name||'Bitte Vornamen eintragen')}</div>
       <div class="note">Stand: ${d.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}, ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr</div>
-      <div class="stats"><div><span class="label">Kapitel</span><b>${Object.keys(save.done).length}/${CHAPTERS.length}</b></div><div><span class="label">Stufen</span><b>${sicherIn('A')+sicherIn('K')}/7</b></div><div><span class="label">Gelöst</span><b>${save.solved||0}</b></div></div>
+      <div class="stats"><div><span class="label">Kapitel</span><b>${Object.keys(save.done).length}/${CHAPTERS.length}</b></div><div><span class="label">Stufen</span><b>${sicherIn('A')+sicherIn('K')}/${allStages().length}</b></div><div><span class="label">Gelöst</span><b>${save.solved||0}</b></div></div>
       <span class="label" style="margin-top:6px">Kapitel</span>
       <div class="list">${CHAPTERS.map((c,i)=>`<div><span>${i+1}. ${c.title}</span><span class="${save.done[i]?'yes':'no'}">${save.done[i]?'✓':'–'}</span></div>`).join('')}</div>
       <span class="label" style="margin-top:6px">Stufen · richtig gelöst · Rekord Minutentest</span>
